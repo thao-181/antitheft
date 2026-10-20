@@ -2,13 +2,27 @@ package com.example.antitheftdemo.alarm
 
 import org.junit.Assert.*
 import org.junit.Test
+import com.example.antitheftdemo.settings.AlarmSettings
+import com.example.antitheftdemo.settings.AlarmTone
 
 class AlarmControllerTest {
     private class FakePlayback : AlarmPlayback {
         var starts = 0
         var playing = false
+        var settings = AlarmSettings()
+        override fun applySettings(value: AlarmSettings) { settings = value }
         override fun start(onState: (AlarmStatus) -> Unit, onFailure: (String) -> Unit) { starts++; playing = true }
         override fun stop() { playing = false }
+    }
+    @Test fun toneChangedBeforeFirstEventIsUsedWithoutStartingPlayback() {
+        val fake = FakePlayback()
+        val alarm = AlarmController(fake)
+        alarm.applySettings(AlarmSettings(tone = AlarmTone.fromId(2)))
+        assertEquals(2, fake.settings.tone.id)
+        assertEquals(0, fake.starts)
+        alarm.trigger("one", true) { fail(it) }
+        assertEquals(2, fake.settings.tone.id)
+        assertEquals(1, fake.starts)
     }
     @Test fun onlySecuredCanTriggerAndRepeatedEventsDoNotOverlap() {
         val fake = FakePlayback()

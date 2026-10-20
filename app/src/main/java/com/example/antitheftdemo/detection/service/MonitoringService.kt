@@ -15,6 +15,16 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import com.example.antitheftdemo.MainActivity
 import com.example.antitheftdemo.R
+import com.example.antitheftdemo.alarm.AlarmEffectsController
+import com.example.antitheftdemo.alarm.AndroidAlarmEffects
+import com.example.antitheftdemo.alarm.AlarmPreview
+import com.example.antitheftdemo.settings.AlarmSettings
+import com.example.antitheftdemo.settings.SettingsRepository
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import com.example.antitheftdemo.alarm.AlarmStatus
 import com.example.antitheftdemo.alarm.AlarmController
 import com.example.antitheftdemo.alarm.AndroidAlarmPlayback
@@ -29,6 +39,9 @@ class MonitoringService : Service() {
     private var alarm: AlarmController? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var finishing = false
+    private var effects: AlarmEffectsController? = null
+    private var settings = AlarmSettings()
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     override fun onBind(intent: Intent?): IBinder? = null
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val id = intent?.getStringExtra("session")
@@ -48,7 +61,19 @@ class MonitoringService : Service() {
             }
             ServiceCompat.startForeground(this, NOTIFICATION, notification(false),
                 if (Build.VERSION.SDK_INT >= 34) ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE else 0)
-            alarm = AlarmController(AndroidAlarmPlayback(this))
+            val repository = SettingsRepository(this)
+            settings = repository.current
+            alarm = AlarmController(AndroidAlarmPlayback(this, settings))
+            effects = AlarmEffectsController(AndroidAlarmEffects(this) { DetectionRepository.controller.message(it) })
+            scope.launch {
+                repository.settings.collect { value ->
+                    settings = value
+                    alarm?.applySettings(value)
+                    if (DetectionRepository.state.value.alarming) {
+                        effects?.update(value)
+                    }
+                }
+            }
             monitor = AndroidMonitor(this)
             acquireSensorWakeLock(type)
             monitor!!.start(type, { trigger(id) }, { finishMonitoring(it) })
@@ -65,12 +90,22 @@ class MonitoringService : Service() {
         wakeLock = getSystemService(PowerManager::class.java)
             .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "AntiTheftDemo:monitor").apply { acquire() }
     }
+    @SuppressLint("WakelockTimeout") // User-armed alarm; released by finishMonitoring/onDestroy.
     private fun trigger(id: String) {
         val snapshot = DetectionRepository.state.value
         if (finishing || snapshot.session != id || snapshot.starting || snapshot.alarming) return
+        AlarmPreview.stop()
+        if (wakeLock?.isHeld != true) {
+            wakeLock = getSystemService(PowerManager::class.java)
+                .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "AntiTheftDemo:alarm").apply { acquire() }
+        }
         DetectionRepository.controller.alarm(id)
+        effects?.start(settings)
         alarm?.trigger(id, DetectionRepository.state.value.alarming,
-            { status -> DetectionRepository.controller.playback(id, status) }, ::alarmUnavailable)
+            { status ->
+                DetectionRepository.controller.playback(id, status)
+                if (!finishing) getSystemService(NotificationManager::class.java).notify(NOTIFICATION, notification(true))
+            }, ::alarmUnavailable)
         if (!finishing) getSystemService(NotificationManager::class.java).notify(NOTIFICATION, notification(true))
     }
     private fun alarmUnavailable(reason: String) {
@@ -100,6 +135,7 @@ class MonitoringService : Service() {
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentTitle(when {
                 DetectionRepository.state.value.alarmStatus == AlarmStatus.FAILED -> "Alarm sound unavailable"
+                DetectionRepository.state.value.alarmStatus == AlarmStatus.SUSPENDED -> "Alarm audio paused or muted"
                 alarming -> "Alarm triggered"
                 else -> "Protection active"
             })
@@ -112,15 +148,18 @@ class MonitoringService : Service() {
     private fun finishMonitoring(message: String?) {
         if (finishing) return
         finishing = true
+        scope.cancel()
         monitor?.stop()
         monitor = null
         alarm?.stop()
         alarm = null
+        effects?.stop()
+        effects = null
         wakeLock?.let { if (it.isHeld) it.release() }
         wakeLock = null
-        session?.let { DetectionRepository.ended(this, it, message) }
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
+        session?.let { DetectionRepository.ended(this, it, message) }
     }
     override fun onDestroy() {
         finishMonitoring("Monitoring service was stopped by Android. Activate protection again.")

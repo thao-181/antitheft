@@ -19,8 +19,6 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.HorizontalDivider
@@ -51,11 +49,10 @@ import androidx.compose.ui.unit.sp
 @Composable
 fun HomeScreen(
     modifier: Modifier = Modifier,
-    onLanguageClick: () -> Unit = {},
-    onPermissionClick: () -> Unit = {},
+    onSettingsClick: () -> Unit = {},
+    onNotificationPermissionClick: () -> Unit = {},
     onNavigation: (HomeItem) -> Unit = {}
 ) {
-    var settingsExpanded by remember { mutableStateOf(false) }
     val snapshot by DetectionRepository.state.collectAsStateWithLifecycle()
 
     Surface(
@@ -79,19 +76,9 @@ fun HomeScreen(
                     color = Color.Black
                 )
 
-                Box {
-                    IconButton(onClick = { settingsExpanded = true }) {
-                        Icon(Icons.Outlined.Settings, contentDescription = "Settings", tint = Color.Black,
-                            modifier = Modifier.size(28.dp))
-                    }
-                    DropdownMenu(expanded = settingsExpanded, onDismissRequest = { settingsExpanded = false }) {
-                        DropdownMenuItem(text = { Text("Language") }, onClick = {
-                            settingsExpanded = false; onLanguageClick()
-                        })
-                        DropdownMenuItem(text = { Text("Permission") }, onClick = {
-                            settingsExpanded = false; onPermissionClick()
-                        })
-                    }
+                IconButton(onClick = onSettingsClick) {
+                    Icon(Icons.Outlined.Settings, contentDescription = "Settings", tint = Color.Black,
+                        modifier = Modifier.size(28.dp))
                 }
             }
 
@@ -111,6 +98,9 @@ fun HomeScreen(
                 }
             }
             snapshot.message?.let { Text(it, color = Color(0xFFEF4444), modifier = Modifier.padding(horizontal = 20.dp)) }
+            if (snapshot.message?.startsWith("Allow notifications") == true) {
+                TextButton(onClick = onNotificationPermissionClick) { Text("Review notification permission") }
+            }
             HomeContent(
                 modifier = Modifier.weight(1f)
             ) { selectedItem ->

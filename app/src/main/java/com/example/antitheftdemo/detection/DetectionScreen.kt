@@ -28,20 +28,23 @@ fun DetectionScreen(
     itemType: HomeItemType,    // Phân loại chức năng để Receiver biết đường đăng ký
     viewModel: DetectionViewModel,
     onBackClick: () -> Unit,
+    confirmationSession: String? = null,
+    onDeactivate: () -> Unit = {},
     onNavigateToPin: () -> Unit // Chuyển sang màn PIN khi bấm Deactivate
 ) {
     val snapshot by viewModel.state.collectAsStateWithLifecycle()
     val currentState = snapshot.states.getValue(itemType)
-    val imageRes = when (currentState) {
-        DetectionState.ACTIVE -> R.drawable.active
-        DetectionState.SECURED -> R.drawable.secured
-        DetectionState.STOP -> R.drawable.stop
+    val presentation = detectionPresentation(snapshot, itemType, confirmationSession)
+    val confirming = presentation == DetectionPresentation.STOP_CONFIRMATION
+    val imageRes = when (presentation) {
+        DetectionPresentation.ACTIVE -> R.drawable.active
+        DetectionPresentation.SECURED -> R.drawable.secured
+        DetectionPresentation.STOP_CONFIRMATION, DetectionPresentation.STOP -> R.drawable.stop
     }
-
-    val statusText = when (currentState) {
-        DetectionState.ACTIVE -> "Tap to active"
-        DetectionState.SECURED -> "Tap to deactivate"
-        DetectionState.STOP -> "Tap to stop"
+    val statusText = when (presentation) {
+        DetectionPresentation.ACTIVE -> "Tap to active"
+        DetectionPresentation.SECURED -> "Tap to deactivate"
+        DetectionPresentation.STOP_CONFIRMATION, DetectionPresentation.STOP -> "Tap to stop"
     }
 
     Scaffold(
@@ -64,15 +67,19 @@ fun DetectionScreen(
             Box(modifier = Modifier.size(280.dp), contentAlignment = Alignment.Center) {
                 Image(
                     painter = painterResource(id = imageRes),
-                    contentDescription = when (currentState) {
-                        DetectionState.ACTIVE -> "Activate protection"
-                        DetectionState.SECURED -> "Protection secured"
-                        DetectionState.STOP -> "Reset protection"
+                    contentDescription = when (presentation) {
+                        DetectionPresentation.ACTIVE -> "Activate protection"
+                        DetectionPresentation.SECURED -> "Protection secured"
+                        DetectionPresentation.STOP_CONFIRMATION -> "Verify PIN to stop protection"
+                        DetectionPresentation.STOP -> "Reset protection"
                     },
                     modifier = Modifier.fillMaxSize().clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null
-                    ) { if (!snapshot.starting) viewModel.onCircleClick(itemType) }
+                    ) {
+                        if (confirming) onNavigateToPin()
+                        else if (!snapshot.starting) viewModel.onCircleClick(itemType)
+                    }
                 )
 
 
@@ -86,15 +93,15 @@ fun DetectionScreen(
                 when (snapshot.alarmStatus) {
                     com.example.antitheftdemo.alarm.AlarmStatus.PLAYING -> "Alarm playing - enter PIN to stop"
                     com.example.antitheftdemo.alarm.AlarmStatus.FAILED -> "Alarm sound unavailable - enter PIN to stop"
-                    com.example.antitheftdemo.alarm.AlarmStatus.SUSPENDED -> "Alarm audio paused by Android - enter PIN to stop"
+                    com.example.antitheftdemo.alarm.AlarmStatus.SUSPENDED -> "Alarm audio paused or muted by Android - enter PIN to stop"
                     else -> "Starting alarm - enter PIN to stop"
                 }, color = Color(0xFFEF4444), modifier = Modifier.padding(horizontal = 24.dp))
             Spacer(modifier = Modifier.height(24.dp))
 
-            if (currentState == DetectionState.SECURED) {
+            if (currentState == DetectionState.SECURED && !confirming) {
                 Button(
                     // CHÍNH Ở ĐÂY: Thay vì tắt ngay, ta gọi callback mở màn hình PIN
-                    onClick = onNavigateToPin,
+                    onClick = onDeactivate,
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF4444)),
                     shape = RoundedCornerShape(8.dp),
                     modifier = Modifier.width(130.dp).height(38.dp)

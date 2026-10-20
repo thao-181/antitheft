@@ -72,4 +72,52 @@ class PinStoreInstrumentedTest {
         preferences.finishOnboarding()
         assertTrue(AppPreferences(context).onboardingComplete)
     }
+    @Test fun pinChangeRequiresOldPinAuthorizationAndDoesNotResetOnboarding() = runBlocking {
+        val store = PinStore(context)
+        store.create("2468")
+        AppPreferences(context).finishOnboarding()
+        assertNull(store.authorizeChange("0000").proof)
+        try { store.replace("1357", "not-authorized"); fail("Unauthenticated change accepted") }
+        catch (_: IllegalStateException) { }
+        assertEquals(PinResult.Verified, store.verify("2468"))
+        val check = store.authorizeChange("2468")
+        assertEquals(PinResult.Verified, check.result)
+        store.replace("1357", checkNotNull(check.proof))
+        assertEquals(PinResult.Incorrect, store.verify("2468"))
+        assertEquals(PinResult.Verified, PinStore(context).verify("1357"))
+        try { store.replace("9999", check.proof!!); fail("Reused change proof accepted") }
+        catch (_: IllegalStateException) { }
+        assertTrue(AppPreferences(context).onboardingComplete)
+    }
+    @Test fun alarmSettingsPersistWithoutChangingPinOrSetup() = runBlocking {
+        val repository = com.example.antitheftdemo.settings.SettingsRepository(context)
+        val store = PinStore(context)
+        store.create("2468")
+        AppPreferences(context).saveLanguage("English")
+        repository.setTone(com.example.antitheftdemo.settings.AlarmTone.TONE_2)
+        repository.setFlash(true)
+        repository.setVibrate(false)
+        val saved = com.example.antitheftdemo.settings.SettingsRepository(context).current
+        assertEquals(com.example.antitheftdemo.settings.AlarmTone.TONE_2, saved.tone)
+        assertTrue(saved.flash)
+        assertFalse(saved.vibrate)
+        assertEquals(PinResult.Verified, store.verify("2468"))
+        assertEquals("English", AppPreferences(context).language)
+    }
+    @Test fun allFourAlarmResourcesAreDistinctAndDecodeAsAudio() {
+        val hashes = mutableSetOf<String>()
+        com.example.antitheftdemo.settings.AlarmTone.entries.forEach { tone ->
+            val bytes = target.resources.openRawResource(tone.resource).use { it.readBytes() }
+            hashes += java.security.MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
+            val player = android.media.MediaPlayer()
+            try {
+                target.resources.openRawResourceFd(tone.resource).use { resource ->
+                    player.setDataSource(resource.fileDescriptor, resource.startOffset, resource.length)
+                }
+                player.prepare()
+                assertTrue(player.duration >= 2000)
+            } finally { player.release() }
+        }
+        assertEquals(4, hashes.size)
+    }
 }

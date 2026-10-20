@@ -1,5 +1,10 @@
 package com.example.antitheftdemo.navigation
 
+import com.example.antitheftdemo.alarm.AlarmPreview
+import androidx.lifecycle.LifecycleEventObserver
+import com.example.antitheftdemo.settings.SettingsScreen
+import com.example.antitheftdemo.settings.SettingsViewModel
+import android.content.pm.PackageManager
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
 import com.example.antitheftdemo.data.AppPreferences
@@ -12,6 +17,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 import kotlinx.coroutines.launch
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
@@ -62,12 +68,13 @@ fun AppNavigation(notificationSession: String? = null, onNotificationConsumed: (
     val currentEntry by navController.currentBackStackEntryAsState()
     LaunchedEffect(notificationSession, currentEntry) {
         val route = currentEntry?.destination?.route
-        if (notificationSession != null && route in listOf("home", "detection/{type}", "pin_verification/{session}", "settings_language", "settings_permission")) {
+        if (notificationSession != null && route in listOf("home", "detection/{type}", "pin_verification/{session}", "settings", "settings_pin", "settings_language", "settings_permission", "stop_confirmation/{type}/{session}")) {
             val snapshot = DetectionRepository.state.value
             if (snapshot.session == notificationSession && snapshot.type != null && !snapshot.starting) {
                 navController.navigate("detection/${snapshot.type.name}") {
                     popUpTo("home") { inclusive = false }; launchSingleTop = true
                 }
+                navController.navigate("stop_confirmation/${snapshot.type.name}/$notificationSession")
                 navController.navigate("pin_verification/$notificationSession") { launchSingleTop = true }
             }
             onNotificationConsumed()
@@ -101,6 +108,29 @@ fun AppNavigation(notificationSession: String? = null, onNotificationConsumed: (
                 }
             }
         }
+        composable("settings") {
+            val model: SettingsViewModel = viewModel()
+            val monitoring by DetectionRepository.state.collectAsStateWithLifecycle()
+            val lifecycle = LocalLifecycleOwner.current.lifecycle
+            DisposableEffect(lifecycle) {
+                val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_STOP) AlarmPreview.stop() }
+                lifecycle.addObserver(observer)
+                onDispose { lifecycle.removeObserver(observer); AlarmPreview.stop() }
+            }
+            LaunchedEffect(monitoring.session) { if (monitoring.session != null) AlarmPreview.stop() }
+            SettingsScreen(model, context.packageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA_FLASH),
+                previewAllowed = monitoring.session == null,
+                onBack = { navController.popBackStack() },
+                onPin = { navController.navigate("settings_pin") { launchSingleTop = true } },
+                onLanguage = { navController.navigate("settings_language") { launchSingleTop = true } },
+                onPreview = { AlarmPreview.play(context, it, model::previewError) },
+                onStopPreview = AlarmPreview::stop)
+        }
+        composable("settings_pin") {
+            val model: PinCodeViewModel = viewModel()
+            LaunchedEffect(Unit) { model.configureSettings() }
+            PinCodeScreen(model) { navController.popBackStack() }
+        }
         composable("settings_language") {
             LanguageScreen(initialLanguage = preferences.language) { item ->
                 scope.launch {
@@ -126,8 +156,8 @@ fun AppNavigation(notificationSession: String? = null, onNotificationConsumed: (
 
         composable("home") {
             HomeScreen(
-                onLanguageClick = { navController.navigate("settings_language") { launchSingleTop = true } },
-                onPermissionClick = { navController.navigate("settings_permission") { launchSingleTop = true } },
+                onSettingsClick = { navController.navigate("settings") { launchSingleTop = true } },
+                onNotificationPermissionClick = { navController.navigate("settings_permission") { launchSingleTop = true } },
                 onNavigation = { selectedItem ->
                     val type = selectedItem.type?.name ?: "UNKNOWN"
                     navController.navigate("detection/$type") { launchSingleTop = true }
@@ -135,8 +165,9 @@ fun AppNavigation(notificationSession: String? = null, onNotificationConsumed: (
             )
         }
 
+        listOf(false, true).forEach { confirmation ->
         composable(
-            route = "detection/{type}", // Cập nhật lại route
+            route = if (confirmation) "stop_confirmation/{type}/{session}" else "detection/{type}",
             arguments = listOf(
                 navArgument("type") { type = NavType.StringType }
             )
@@ -162,7 +193,9 @@ fun AppNavigation(notificationSession: String? = null, onNotificationConsumed: (
                     savedStateHandle.getStateFlow("pin_verified", "").collect { proof ->
                         if (proof.isNotEmpty()) {
                             savedStateHandle["pin_verified"] = ""
-                            viewModel.stopDetection(proof)
+                            if (viewModel.stopDetection(proof)) {
+                                navController.popBackStack("home", inclusive = false)
+                            }
                         }
                     }
                 }
@@ -173,12 +206,20 @@ fun AppNavigation(notificationSession: String? = null, onNotificationConsumed: (
                 itemType = itemType,
                 viewModel = viewModel,
                 onBackClick = { navController.popBackStack() },
+                confirmationSession = if (confirmation) backStackEntry.arguments?.getString("session") else null,
+                onDeactivate = {
+                    DetectionRepository.state.value.session?.let { session ->
+                        navController.navigate("stop_confirmation/${itemType.name}/$session") { launchSingleTop = true }
+                    }
+                },
                 onNavigateToPin = {
                     DetectionRepository.state.value.session?.let { session ->
                         navController.navigate("pin_verification/$session") { launchSingleTop = true }
                     }
                 }
             )
+        }
+
         }
 
         composable("pin_verification/{session}") { entry ->

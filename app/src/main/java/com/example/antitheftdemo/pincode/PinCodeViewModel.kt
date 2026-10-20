@@ -20,6 +20,8 @@ class PinCodeViewModel(application: Application) : AndroidViewModel(application)
         private set
     private var firstPin = ""
     private var completed = false
+    private var settingsMode = false
+    private var changeProof: String? = null
     var currentPin by mutableStateOf("")
         private set
     var error by mutableStateOf<String?>(null)
@@ -40,6 +42,16 @@ class PinCodeViewModel(application: Application) : AndroidViewModel(application)
         if (isVerifyMode) return
         isVerifyMode = true
         isCreateMode = false
+        currentPin = ""
+    }
+    fun configureSettings() {
+        if (settingsMode) return
+        settingsMode = true
+        if (store.hasPin) setVerifyMode()
+    }
+    override fun onCleared() {
+        changeProof?.let(store::revokeChange)
+        firstPin = ""
         currentPin = ""
     }
     fun onPinChange(value: String) {
@@ -66,8 +78,22 @@ class PinCodeViewModel(application: Application) : AndroidViewModel(application)
         busy = true
         viewModelScope.launch {
             try {
-                val result = if (isVerifyMode) store.verify(currentPin) else {
-                    store.create(currentPin); PinResult.Verified
+                val result = if (isVerifyMode && settingsMode) {
+                    val authorization = store.authorizeChange(currentPin)
+                    if (authorization.result == PinResult.Verified) {
+                        changeProof = authorization.proof
+                        currentPin = ""
+                        firstPin = ""
+                        isVerifyMode = false
+                        isCreateMode = true
+                        return@launch
+                    }
+                    authorization.result
+                } else if (isVerifyMode) store.verify(currentPin) else {
+                    val proof = changeProof
+                    if (proof != null) store.replace(currentPin, proof) else store.create(currentPin)
+                    changeProof = null
+                    PinResult.Verified
                 }
                 if (result == PinResult.Verified) {
                     completed = true
@@ -82,7 +108,15 @@ class PinCodeViewModel(application: Application) : AndroidViewModel(application)
                     }
                 }
             } catch (cancelled: CancellationException) { throw cancelled }
-            catch (_: Exception) { error = "Cannot access PIN storage. Please retry." }
+            catch (_: Exception) {
+                if (settingsMode && changeProof != null) {
+                    changeProof?.let(store::revokeChange)
+                    changeProof = null
+                    firstPin = ""
+                    setVerifyMode()
+                    error = "Cannot save PIN. Verify your current PIN again."
+                } else error = "Cannot access PIN storage. Please retry."
+            }
             finally { busy = false }
         }
     }

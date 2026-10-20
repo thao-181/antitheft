@@ -39,6 +39,7 @@ object DetectionRepository {
             controller.message("Allow notifications in Permissions before activating monitoring."); return
         }
         val session = controller.request(type) ?: return
+        com.example.antitheftdemo.alarm.AlarmPreview.stop()
         try {
             ContextCompat.startForegroundService(context, Intent(context, MonitoringService::class.java)
                 .putExtra("session", session).putExtra("type", type.name))
@@ -59,9 +60,11 @@ object DetectionRepository {
             .putString("active_type", state.value.type?.name).apply()
         controller.started(session)
     }
-    fun stopVerified(proof: String) {
-        controller.consumeProof(proof) ?: return
-        stopRuntime?.invoke(null)
+    fun stopVerified(proof: String): Boolean {
+        val session = controller.consumeProof(proof) ?: return false
+        val stop = stopRuntime ?: return false
+        stop(null)
+        return state.value.session != session
     }
     fun failed(session: String, message: String) {
         if (state.value.session != session) return
