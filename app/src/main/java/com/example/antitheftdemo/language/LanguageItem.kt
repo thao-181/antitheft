@@ -4,7 +4,8 @@ import com.example.antitheftdemo.R
 
 data class LanguageItem(
     val title: String,
-    val icon: Int
+    val icon: Int,
+    val code: String = requireNotNull(LanguageCodes.code(title))
 )
 
 var listItem = listOf(

@@ -33,6 +33,20 @@ class AlarmEffectsTest {
         effects.update(configured)
         assertFalse(output.flashing)
     }
+    @Test fun defaultVibrationStartsOnlyOnAlarmAndDoesNotOverlap() {
+        val output = Output()
+        val effects = AlarmEffectsController(output)
+        effects.update(AlarmSettings(vibrate = true, flash = true))
+        assertEquals(0, output.starts)
+        effects.start(AlarmSettings(vibrate = true, flash = true))
+        assertTrue(output.vibrating)
+        assertTrue(output.flashing)
+        effects.update(AlarmSettings(vibrate = true, flash = true))
+        assertEquals(1, output.starts)
+        effects.stop()
+        assertFalse(output.vibrating)
+        assertFalse(output.flashing)
+    }
     @Test fun volumeAndFocusRestrictionsAreReportedWithoutPretendingToPlay() {
         assertEquals(AlarmStatus.SUSPENDED, AlarmAudibility.status(true, true, 0, false))
         assertEquals(AlarmStatus.SUSPENDED, AlarmAudibility.status(true, false, 5, false))

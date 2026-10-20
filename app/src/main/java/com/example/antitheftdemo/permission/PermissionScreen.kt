@@ -1,5 +1,8 @@
 package com.example.antitheftdemo.permission
 
+import com.example.antitheftdemo.language.userText
+import androidx.compose.ui.res.stringResource
+import com.example.antitheftdemo.R
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -55,7 +58,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.antitheftdemo.R
 @Preview
 @Composable
 fun PermissionScreen(
@@ -107,7 +109,7 @@ fun PermissionScreen(
             .statusBarsPadding()
     ) {
         Text(
-            text = "Permission",
+            text = stringResource(R.string.permission),
             fontSize = 24.sp,
             fontWeight = FontWeight.Bold,
             color = Color.Black,
@@ -124,14 +126,14 @@ fun PermissionScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Image(painter = painterResource(id = R.drawable.layer1),
-                contentDescription = "Permission",
+                contentDescription = stringResource(R.string.permission),
                 modifier = Modifier
                     .height(300.dp)
                     .fillMaxWidth()
             )
 
             Text(
-                text = "This app needs permissions below to work properly",
+                text = stringResource(R.string.permission_description),
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Normal,
                 color = Color(0xFF7F8C8D),
@@ -152,7 +154,7 @@ fun PermissionScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Allow access",
+                    text = stringResource(R.string.allow_access),
                     fontSize = 16.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = Color(0xFF1A1D20)
@@ -170,14 +172,14 @@ fun PermissionScreen(
                 )
             }
             Text(
-                text = if (isAllowed) "Notifications allowed. Monitoring can show its status."
-                    else "Allow notifications to activate background monitoring. You can continue setup without granting it.",
+                text = userText(if (isAllowed) "@string/notifications_allowed"
+                    else "@string/notifications_needed"),
                 color = Color(0xFF7F8C8D), fontSize = 14.sp, textAlign = TextAlign.Center,
                 modifier = Modifier.padding(top = 16.dp)
             )
-            if (denied) Text("Permission denied. Retry or enable notifications in App Settings.",
+            if (denied) Text(stringResource(R.string.permission_denied),
                 color = Color(0xFFEF4444), fontSize = 14.sp)
-            TextButton(onClick = { openSettings() }) { Text("App Settings") }
+            TextButton(onClick = { openSettings() }) { Text(stringResource(R.string.app_settings)) }
 
         }
 
@@ -190,7 +192,7 @@ fun PermissionScreen(
             contentAlignment = Alignment.Center
         ) {
             Text(
-                text = "Continue",
+                text = stringResource(R.string.continue_action),
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color(0xFF0075FF), // Chữ màu xanh dương

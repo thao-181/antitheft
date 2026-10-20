@@ -18,18 +18,15 @@ data class DetectionSnapshot(
 )
 
 /** Main-thread owner of the one monitoring session. No Android dependencies. */
-class DetectionController {
+class DetectionController(private val now: () -> Long = { System.nanoTime() / 1_000_000 }) {
     private val mutable = MutableStateFlow(DetectionSnapshot())
     val state = mutable.asStateFlow()
-    private val proofs = mutableMapOf<String, String>()
+    private data class Grant(val session: String, val expires: Long)
+    private val proofs = mutableMapOf<String, Grant>()
     fun request(type: HomeItemType): String? {
         val old = mutable.value
         if (old.type != null) {
-            mutable.value = old.copy(message = "Deactivate ${old.type.name.replace('_', ' ')} with PIN first.")
-            return null
-        }
-        if (old.states[type] == DetectionState.STOP) {
-            mutable.value = old.copy(states = old.states + (type to DetectionState.ACTIVE), message = null)
+            mutable.value = old.copy(message = "@string/other_mode")
             return null
         }
         val session = UUID.randomUUID().toString()
@@ -52,17 +49,23 @@ class DetectionController {
     }
     fun issueProof(session: String): String? {
         if (mutable.value.session != session || mutable.value.starting) return null
-        return UUID.randomUUID().toString().also { proofs[it] = session }
+        proofs.clear()
+        return UUID.randomUUID().toString().also { proofs[it] = Grant(session, now() + 60_000) }
     }
+    fun validProof(proof: String): Boolean = proofs[proof]?.let {
+        it.session == mutable.value.session && now() < it.expires
+    } == true
+    fun revokeProof(proof: String) { proofs.remove(proof) }
     fun consumeProof(proof: String): String? {
-        val session = proofs.remove(proof) ?: return null
-        return session.takeIf { it == mutable.value.session }
+        val valid = validProof(proof)
+        val grant = proofs.remove(proof) ?: return null
+        return grant.session.takeIf { valid }
     }
     fun ended(session: String, message: String? = null) {
         val old = mutable.value
         if (old.session != session || old.type == null) return
         proofs.clear()
-        mutable.value = old.copy(states = old.states + (old.type to DetectionState.STOP), type = null,
+        mutable.value = old.copy(states = old.states + (old.type to DetectionState.ACTIVE), type = null,
             session = null, starting = false, alarming = false, alarmStatus = AlarmStatus.IDLE, message = message)
     }
     fun message(value: String) { mutable.value = mutable.value.copy(message = value) }

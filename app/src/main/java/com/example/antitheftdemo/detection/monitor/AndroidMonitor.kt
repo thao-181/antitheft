@@ -54,7 +54,7 @@ class AndroidMonitor(context: Context) : MonitorBackend {
         cleanup.clear()
     }
     private fun batteryIntent() = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
-        ?: error("Battery information unavailable")
+        ?: error("@string/battery_unavailable")
     private fun plugged(intent: Intent) = intent.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) != 0
     private fun percent(intent: Intent): Int {
         val level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
@@ -63,7 +63,7 @@ class AndroidMonitor(context: Context) : MonitorBackend {
     }
     private fun charger(alarm: () -> Unit) {
         val initial = plugged(batteryIntent())
-        check(initial) { "Connect a charger before activating this mode." }
+        check(initial) { "@string/charger_required" }
         val rule = DisconnectRule(initial)
         broadcasts.register(IntentFilter().apply {
             addAction(Intent.ACTION_POWER_CONNECTED); addAction(Intent.ACTION_POWER_DISCONNECTED)
@@ -80,7 +80,7 @@ class AndroidMonitor(context: Context) : MonitorBackend {
     }
     private fun battery(alarm: () -> Unit) {
         val initial = percent(batteryIntent())
-        check(initial >= 0) { "Battery percentage unavailable" }
+        check(initial >= 0) { "@string/battery_unavailable" }
         val rule = BatteryFullRule(initial)
         broadcasts.register(IntentFilter(Intent.ACTION_BATTERY_CHANGED)) { intent ->
             if (rule.update(percent(intent), plugged(intent))) alarm()
@@ -88,7 +88,7 @@ class AndroidMonitor(context: Context) : MonitorBackend {
     }
     private fun sensor(type: Int, alarm: () -> Unit, failure: (String) -> Unit) {
         val manager = context.getSystemService(SensorManager::class.java)
-        val sensor = manager.getDefaultSensor(type) ?: error("This device does not have the required sensor.")
+        val sensor = manager.getDefaultSensor(type) ?: error("@string/sensor_missing")
         val proximity = ProximityRule()
         val motion = MotionRule()
         var received = false
@@ -106,16 +106,16 @@ class AndroidMonitor(context: Context) : MonitorBackend {
         }
         cleanup += { manager.unregisterListener(listener) }
         check(manager.registerListener(listener, sensor, SensorManager.SENSOR_DELAY_GAME, handler)) {
-            "Cannot register the sensor listener."
+            "@string/sensor_register"
         }
-        handler.postDelayed({ if (!received) failure("Sensor did not deliver data. Monitoring stopped.") }, 5000)
+        handler.postDelayed({ if (!received) failure("@string/sensor_stopped") }, 5000)
         if (type == Sensor.TYPE_ACCELEROMETER) {
             val expectedGeneration = generation
             val watchdog = object : Runnable {
                 override fun run() {
                     if (generation != expectedGeneration) return
                     if (SystemClock.elapsedRealtime() - lastEvent > 5000)
-                        failure("Motion sensor stopped delivering data. Monitoring stopped.")
+                        failure("@string/sensor_stopped")
                     else handler.postDelayed(this, 2000)
                 }
             }
@@ -123,7 +123,7 @@ class AndroidMonitor(context: Context) : MonitorBackend {
         }
         val callback = object : SensorManager.DynamicSensorCallback() {
             override fun onDynamicSensorDisconnected(disconnected: Sensor) {
-                if (disconnected.id == sensor.id) failure("Sensor disconnected. Monitoring stopped.")
+                if (disconnected.id == sensor.id) failure("@string/sensor_disconnected")
             }
         }
         manager.registerDynamicSensorCallback(callback, handler)
@@ -140,7 +140,7 @@ class AndroidMonitor(context: Context) : MonitorBackend {
             return device.type in supported
         }
         val initial = audio.getDevices(AudioManager.GET_DEVICES_OUTPUTS).filter(::headset).map { it.id }.toSet()
-        check(initial.isNotEmpty()) { "Connect wired or Bluetooth headphones before activating this mode." }
+        check(initial.isNotEmpty()) { "@string/headphones_required" }
         val rule = HeadphonesRule(initial)
         val expectedGeneration = generation
         val recheck = Runnable {
@@ -165,7 +165,7 @@ class AndroidMonitor(context: Context) : MonitorBackend {
     private fun wifi(alarm: () -> Unit) {
         val manager = context.getSystemService(WifiManager::class.java)
         val connectivity = context.getSystemService(ConnectivityManager::class.java)
-        check(manager.isWifiEnabled) { "Enable Wi-Fi before activating this mode." }
+        check(manager.isWifiEnabled) { "@string/wifi_required" }
         val networks = mutableSetOf<Network>()
         val rule = WifiRule(true, false)
         val registeredGeneration = generation

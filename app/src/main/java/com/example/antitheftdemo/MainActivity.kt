@@ -2,7 +2,9 @@ package com.example.antitheftdemo
 
 import android.content.Intent
 import android.os.Bundle
-import androidx.activity.ComponentActivity
+import androidx.appcompat.app.AppCompatActivity
+import android.content.Context
+import com.example.antitheftdemo.language.AppLocale
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.getValue
@@ -12,7 +14,11 @@ import com.example.antitheftdemo.detection.DetectionRepository
 import com.example.antitheftdemo.navigation.AppNavigation
 import com.example.antitheftdemo.ui.theme.AntiTheftDemoTheme
 
-class MainActivity : ComponentActivity() {
+class MainActivity : AppCompatActivity() {
+    override fun attachBaseContext(newBase: Context) {
+        AppLocale.initialize(newBase)
+        super.attachBaseContext(newBase)
+    }
     private var notificationSession by mutableStateOf<String?>(null)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

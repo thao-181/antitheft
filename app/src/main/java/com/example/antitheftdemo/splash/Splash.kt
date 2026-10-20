@@ -1,7 +1,20 @@
 package com.example.antitheftdemo.splash
 
 
+import com.example.antitheftdemo.language.userText
+import androidx.compose.ui.res.stringResource
+import com.example.antitheftdemo.R
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.ui.graphics.Color
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.view.WindowCompat
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import android.os.Build
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -23,13 +36,35 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
-import com.example.antitheftdemo.R
 
 
 @Preview(showBackground = true, showSystemUi = true)
 @Composable
+@Suppress("DEPRECATION") // Needed for opaque system bars before enforced edge-to-edge.
 fun SplashContent(onFinished: () -> Unit = {}) {
 
+    val context = LocalContext.current
+    DisposableEffect(context) {
+        val window = context.splashActivity()?.window
+        val controller = window?.let { WindowCompat.getInsetsController(it, it.decorView) }
+        val oldStatus = controller?.isAppearanceLightStatusBars
+        val oldNavigation = controller?.isAppearanceLightNavigationBars
+        val oldStatusColor = window?.statusBarColor
+        val oldNavigationColor = window?.navigationBarColor
+        val oldContrast = if (Build.VERSION.SDK_INT >= 29) window?.isNavigationBarContrastEnforced else null
+        controller?.isAppearanceLightStatusBars = true
+        controller?.isAppearanceLightNavigationBars = true
+        window?.statusBarColor = android.graphics.Color.WHITE
+        window?.navigationBarColor = android.graphics.Color.WHITE
+        if (Build.VERSION.SDK_INT >= 29) window?.isNavigationBarContrastEnforced = false
+        onDispose {
+            oldStatus?.let { controller?.isAppearanceLightStatusBars = it }
+            oldNavigation?.let { controller?.isAppearanceLightNavigationBars = it }
+            oldStatusColor?.let { window.statusBarColor = it }
+            oldNavigationColor?.let { window.navigationBarColor = it }
+            if (Build.VERSION.SDK_INT >= 29 && oldContrast != null) window?.isNavigationBarContrastEnforced = oldContrast
+        }
+    }
     var progress by remember { mutableStateOf(0f) }
 
     LaunchedEffect(Unit) {
@@ -42,7 +77,7 @@ fun SplashContent(onFinished: () -> Unit = {}) {
     }
 
     Column(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize().background(Color.White).systemBarsPadding(),
         horizontalAlignment = Alignment.CenterHorizontally
 
     ) {
@@ -55,8 +90,9 @@ fun SplashContent(onFinished: () -> Unit = {}) {
 
 
         Text(
-            text = "Anti Theft Alarm",
+            text = stringResource(R.string.app_title),
 
+            color = Color.Black,
             style = MaterialTheme.typography.titleMedium
         )
 
@@ -70,7 +106,8 @@ fun SplashContent(onFinished: () -> Unit = {}) {
         )
 
         Text(
-            text = "This action may contain advertising",
+            text = stringResource(R.string.splash_ad),
+            color = Color.Black,
             modifier = Modifier.padding(top = 8.dp)
         )
 
@@ -78,4 +115,10 @@ fun SplashContent(onFinished: () -> Unit = {}) {
 
     }
 
+}
+
+private tailrec fun Context.splashActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.splashActivity()
+    else -> null
 }

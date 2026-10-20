@@ -1,0 +1,8 @@
+<resources>
+    <style name="Theme.AntiTheftDemo" parent="Base.Theme.AntiTheftDemo.Starting">
+        <item name="android:windowLightNavigationBar">true</item>
+        <item name="android:windowSplashScreenBackground">@android:color/white</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">@android:color/white</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/logo</item>
+    </style>
+</resources>

@@ -18,7 +18,7 @@ object AlarmPreview {
         if (DetectionRepository.state.value.session != null) return
         val preview = AndroidAlarmPlayback(context.applicationContext, AlarmSettings(tone = tone, vibrate = false), loop = false)
         playback = preview
-        preview.start({}, { stop(); onFailure("Tone preview is unavailable under the current audio policy.") })
+        preview.start({}, { stop(); onFailure("@string/preview_error") })
         handler.postDelayed({ if (playback === preview) stop() }, 3000)
     }
     fun stop() {

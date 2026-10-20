@@ -1,5 +1,8 @@
 package com.example.antitheftdemo.intro
 
+import com.example.antitheftdemo.language.userText
+import androidx.compose.ui.res.stringResource
+import com.example.antitheftdemo.R
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -28,7 +31,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun IntroScreen(
     modifier: Modifier = Modifier,
-    onIntroFinished: () -> Unit = {} // Gọi callback này khi nhấn "Next" ở trang cuối để chuyển sang HomeScreen
+    onIntroFinished: () -> Unit = {} // Gọi callback này khi nhấn "@string/next" ở trang cuối để chuyển sang HomeScreen
 ) {
     // Khởi tạo trạng thái Pager dựa vào kích thước danh sách listIntro của bạn
     val pagerState = rememberPagerState(pageCount = { listIntro.size })
@@ -77,9 +80,9 @@ fun IntroScreen(
                 }
             }
 
-            // Nút bấm "Next"
+            // Nút bấm "@string/next"
             Text(
-                text = "Next",
+                text = stringResource(R.string.next),
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color(0xFF1A1D20),
@@ -122,7 +125,7 @@ fun IntroPageContent(item: IntroItem) {
         Spacer(modifier = Modifier.height(30.dp))
 
 
-        Text(text = item.title,
+        Text(text = userText(item.title),
             fontSize = 24.sp,
             fontWeight = FontWeight.Bold
             )
@@ -131,7 +134,7 @@ fun IntroPageContent(item: IntroItem) {
         Spacer(modifier = Modifier.height(16.dp))
 
 
-        Text(text = item.description,
+        Text(text = userText(item.description),
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(horizontal = 32.dp)
             )

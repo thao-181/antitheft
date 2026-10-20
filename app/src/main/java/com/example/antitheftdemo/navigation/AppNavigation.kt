@@ -1,7 +1,12 @@
 package com.example.antitheftdemo.navigation
 
+import com.example.antitheftdemo.language.userText
+import androidx.compose.ui.res.stringResource
+import com.example.antitheftdemo.R
 import com.example.antitheftdemo.alarm.AlarmPreview
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.activity.compose.BackHandler
+import kotlinx.coroutines.delay
 import com.example.antitheftdemo.settings.SettingsScreen
 import com.example.antitheftdemo.settings.SettingsViewModel
 import android.content.pm.PackageManager
@@ -60,7 +65,7 @@ fun AppNavigation(notificationSession: String? = null, onNotificationConsumed: (
                 save(); setupError = null; retrySetup = null; next(route)
             } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
             catch (_: Exception) {
-                setupError = "Cannot save setup. Please retry."
+                setupError = "@string/save_setup_error"
                 retrySetup = { saveAndNext(route, save) }
             } finally { saving = false }
         }
@@ -68,13 +73,12 @@ fun AppNavigation(notificationSession: String? = null, onNotificationConsumed: (
     val currentEntry by navController.currentBackStackEntryAsState()
     LaunchedEffect(notificationSession, currentEntry) {
         val route = currentEntry?.destination?.route
-        if (notificationSession != null && route in listOf("home", "detection/{type}", "pin_verification/{session}", "settings", "settings_pin", "settings_language", "settings_permission", "stop_confirmation/{type}/{session}")) {
+        if (notificationSession != null && route in listOf("home", "detection/{type}", "pin_verification/{session}", "settings", "settings_pin", "settings_language", "settings_permission")) {
             val snapshot = DetectionRepository.state.value
             if (snapshot.session == notificationSession && snapshot.type != null && !snapshot.starting) {
                 navController.navigate("detection/${snapshot.type.name}") {
                     popUpTo("home") { inclusive = false }; launchSingleTop = true
                 }
-                navController.navigate("stop_confirmation/${snapshot.type.name}/$notificationSession")
                 navController.navigate("pin_verification/$notificationSession") { launchSingleTop = true }
             }
             onNotificationConsumed()
@@ -94,8 +98,8 @@ fun AppNavigation(notificationSession: String? = null, onNotificationConsumed: (
             }
         }
         composable("language") {
-            LanguageScreen(initialLanguage = preferences.language) { item ->
-                saveAndNext("intro") { preferences.saveLanguage(item.title) }
+            LanguageScreen(initialLanguage = com.example.antitheftdemo.language.AppLocale.current(context) ?: preferences.language) { item ->
+                saveAndNext("intro") { preferences.saveLanguage(item.code); com.example.antitheftdemo.language.AppLocale.apply(item.code) }
             }
         }
         composable("intro") {
@@ -132,10 +136,10 @@ fun AppNavigation(notificationSession: String? = null, onNotificationConsumed: (
             PinCodeScreen(model) { navController.popBackStack() }
         }
         composable("settings_language") {
-            LanguageScreen(initialLanguage = preferences.language) { item ->
+            LanguageScreen(initialLanguage = com.example.antitheftdemo.language.AppLocale.current(context) ?: preferences.language) { item ->
                 scope.launch {
-                    try { preferences.saveLanguage(item.title); navController.popBackStack() }
-                    catch (_: Exception) { setupError = "Cannot save language. Please retry." }
+                    try { preferences.saveLanguage(item.code); navController.popBackStack(); com.example.antitheftdemo.language.AppLocale.apply(item.code) }
+                    catch (_: Exception) { setupError = "@string/save_language_error" }
                 }
             }
         }
@@ -165,9 +169,8 @@ fun AppNavigation(notificationSession: String? = null, onNotificationConsumed: (
             )
         }
 
-        listOf(false, true).forEach { confirmation ->
         composable(
-            route = if (confirmation) "stop_confirmation/{type}/{session}" else "detection/{type}",
+            route = "detection/{type}",
             arguments = listOf(
                 navArgument("type") { type = NavType.StringType }
             )
@@ -176,12 +179,12 @@ fun AppNavigation(notificationSession: String? = null, onNotificationConsumed: (
             val itemType = runCatching { HomeItemType.valueOf(typeStr) }.getOrElse { HomeItemType.WIFI_DETECTION }
 
             val title = when (itemType) {
-                HomeItemType.WIFI_DETECTION -> "Wi-Fi Detection"
-                HomeItemType.PROXIMITY_DETECTION -> "Proximity Detection"
-                HomeItemType.MOTION_DETECTION -> "Motion Detection"
-                HomeItemType.CHARGER_DETECTION -> "Charger Detection"
-                HomeItemType.HANDSFREE_DETECTION -> "Handsfree Detection"
-                HomeItemType.BATTERY_FULL_DETECTION -> "Battery Full Detection"
+                HomeItemType.WIFI_DETECTION -> "@string/wifi"
+                HomeItemType.PROXIMITY_DETECTION -> "@string/proximity"
+                HomeItemType.MOTION_DETECTION -> "@string/motion"
+                HomeItemType.CHARGER_DETECTION -> "@string/charger"
+                HomeItemType.HANDSFREE_DETECTION -> "@string/handsfree"
+                HomeItemType.BATTERY_FULL_DETECTION -> "@string/battery_full"
             }
 
             val viewModel: DetectionViewModel = viewModel()
@@ -193,33 +196,51 @@ fun AppNavigation(notificationSession: String? = null, onNotificationConsumed: (
                     savedStateHandle.getStateFlow("pin_verified", "").collect { proof ->
                         if (proof.isNotEmpty()) {
                             savedStateHandle["pin_verified"] = ""
-                            if (viewModel.stopDetection(proof)) {
-                                navController.popBackStack("home", inclusive = false)
-                            }
+                            viewModel.acceptProof(proof)
                         }
                     }
                 }
             }
 
+            val authorizedSession = viewModel.authorizedSession
+            val monitoring by viewModel.state.collectAsStateWithLifecycle()
+            fun leaveStop() { viewModel.revokeStop() }
+            BackHandler(authorizedSession != null) { leaveStop() }
+            DisposableEffect(lifecycle) {
+                val observer = LifecycleEventObserver { _, event ->
+                    if (event == Lifecycle.Event.ON_STOP) viewModel.revokeStop()
+                }
+                lifecycle.addObserver(observer)
+                onDispose { lifecycle.removeObserver(observer); viewModel.revokeStop() }
+            }
+            LaunchedEffect(authorizedSession) {
+                if (authorizedSession != null) { delay(60_000); viewModel.revokeStop() }
+            }
+            LaunchedEffect(monitoring.session, authorizedSession) {
+                if (authorizedSession != null && monitoring.session != authorizedSession) {
+                    viewModel.revokeStop()
+                    navController.popBackStack("home", false)
+                }
+            }
             DetectionScreen(
                 title = title,
                 itemType = itemType,
                 viewModel = viewModel,
-                onBackClick = { navController.popBackStack() },
-                confirmationSession = if (confirmation) backStackEntry.arguments?.getString("session") else null,
+                onBackClick = { if (authorizedSession != null) leaveStop() else navController.popBackStack() },
+                authorizedSession = authorizedSession,
+                stopCompleted = viewModel.stopCompleted,
                 onDeactivate = {
                     DetectionRepository.state.value.session?.let { session ->
-                        navController.navigate("stop_confirmation/${itemType.name}/$session") { launchSingleTop = true }
+                        navController.navigate("pin_verification/$session") { launchSingleTop = true }
                     }
                 },
-                onNavigateToPin = {
-                    DetectionRepository.state.value.session?.let { session ->
+                onConfirmStop = {
+                    if (viewModel.confirmStop()) navController.popBackStack("home", false)
+                    else DetectionRepository.state.value.session?.let { session ->
                         navController.navigate("pin_verification/$session") { launchSingleTop = true }
                     }
                 }
             )
-        }
-
         }
 
         composable("pin_verification/{session}") { entry ->
@@ -242,9 +263,9 @@ fun AppNavigation(notificationSession: String? = null, onNotificationConsumed: (
         }
     }
     setupError?.let { message ->
-        AlertDialog(onDismissRequest = { setupError = null }, title = { Text("Cannot save") },
-            text = { Text(message) }, confirmButton = {
-                TextButton(onClick = { setupError = null; retrySetup?.invoke() }) { Text("Retry") }
+        AlertDialog(onDismissRequest = { setupError = null }, title = { Text(stringResource(R.string.cannot_save)) },
+            text = { Text(userText(message)) }, confirmButton = {
+                TextButton(onClick = { setupError = null; retrySetup?.invoke() }) { Text(stringResource(R.string.retry)) }
             })
     }
 }

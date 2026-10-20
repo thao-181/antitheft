@@ -34,7 +34,7 @@ class AndroidAlarmPlayback(context: Context, initial: AlarmSettings = AlarmSetti
         override fun run() {
             if (!active) return
             try { publishStatus(); handler.postDelayed(this, 1000) }
-            catch (_: Exception) { fail("Android audio status is unavailable.") }
+            catch (_: Exception) { fail("@string/audio_unavailable") }
         }
     }
     override fun start(onState: (AlarmStatus) -> Unit, onFailure: (String) -> Unit) {
@@ -48,7 +48,7 @@ class AndroidAlarmPlayback(context: Context, initial: AlarmSettings = AlarmSetti
                 if (!active || current != generation) return@OnAudioFocusChangeListener
                 try {
                     when (change) {
-                        AudioManager.AUDIOFOCUS_LOSS -> fail("Android removed alarm audio focus.")
+                        AudioManager.AUDIOFOCUS_LOSS -> fail("@string/audio_unavailable")
                         AudioManager.AUDIOFOCUS_LOSS_TRANSIENT, AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
                             focused = false
                             if (prepared && player?.isPlaying == true) player?.pause()
@@ -60,7 +60,7 @@ class AndroidAlarmPlayback(context: Context, initial: AlarmSettings = AlarmSetti
                             publishStatus()
                         }
                     }
-                } catch (_: Exception) { fail("Alarm audio could not resume.") }
+                } catch (_: Exception) { fail("@string/audio_unavailable") }
             }
             focusListener = listener
             val granted = if (Build.VERSION.SDK_INT >= 26) {
@@ -73,11 +73,11 @@ class AndroidAlarmPlayback(context: Context, initial: AlarmSettings = AlarmSetti
                 @Suppress("DEPRECATION")
                 audio.requestAudioFocus(listener, AudioManager.STREAM_ALARM, AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
             }
-            if (granted == AudioManager.AUDIOFOCUS_REQUEST_FAILED) { fail("Android did not grant alarm audio focus."); return }
+            if (granted == AudioManager.AUDIOFOCUS_REQUEST_FAILED) { fail("@string/audio_unavailable"); return }
             focused = granted == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
             preparePlayer()
             handler.post(health)
-        } catch (_: Exception) { fail("Alarm audio is unavailable.") }
+        } catch (_: Exception) { fail("@string/audio_unavailable") }
     }
     private fun preparePlayer() {
         releasePlayer()
@@ -89,10 +89,10 @@ class AndroidAlarmPlayback(context: Context, initial: AlarmSettings = AlarmSetti
         media.setOnPreparedListener {
             if (player !== it || !active) return@setOnPreparedListener
             try { prepared = true; if (focused) it.start(); publishStatus() }
-            catch (_: Exception) { fail("Alarm playback failed.") }
+            catch (_: Exception) { fail("@string/audio_unavailable") }
         }
         media.setOnErrorListener { failed, _, _ ->
-            if (player === failed) fail("Alarm playback failed.")
+            if (player === failed) fail("@string/audio_unavailable")
             true
         }
         media.setOnCompletionListener { if (!loop && player === it) stop() }
@@ -106,7 +106,7 @@ class AndroidAlarmPlayback(context: Context, initial: AlarmSettings = AlarmSetti
         val changed = settings.tone != value.tone
         settings = value
         if (active && changed) {
-            try { preparePlayer() } catch (_: Exception) { fail("Selected alarm tone could not be played.") }
+            try { preparePlayer() } catch (_: Exception) { fail("@string/audio_unavailable") }
         }
     }
     private fun publishStatus() {

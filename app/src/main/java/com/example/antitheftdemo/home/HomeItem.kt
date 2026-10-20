@@ -18,38 +18,38 @@ data class HomeItem(
 var listItem = listOf(
     HomeItem(
         type = HomeItemType.PROXIMITY_DETECTION,
-        title = "Proximity Detection",
-        description = "Detected when taken out of the bag",
+        title = "@string/proximity",
+        description = "@string/proximity_description",
         icon = R.drawable.proximily
     ),
     HomeItem(
         type = HomeItemType.MOTION_DETECTION,
-        title = "Motion Detection",
-        description = "Detect when the device is moved",
+        title = "@string/motion",
+        description = "@string/motion_description",
         icon = R.drawable.motion
     ),
     HomeItem(
         type = HomeItemType.CHARGER_DETECTION,
-        title = "Charger Detection",
-        description = "Alert when the charger is disconnected",
+        title = "@string/charger",
+        description = "@string/charger_description",
         icon = R.drawable.changer
     ),
     HomeItem(
         type = HomeItemType.HANDSFREE_DETECTION,
-        title = "Handsfree Detection",
-        description = "Alert when connected headphones are disconnected",
+        title = "@string/handsfree",
+        description = "@string/handsfree_description",
         icon = R.drawable.handsfree
     ),
     HomeItem(
         type = HomeItemType.WIFI_DETECTION,
-        title = "Wi-Fi Detection",
-        description = "Alert when Wi-Fi is turned off or disconnected",
+        title = "@string/wifi",
+        description = "@string/wifi_description",
         icon = R.drawable.wifi
     ),
     HomeItem(
         type = HomeItemType.BATTERY_FULL_DETECTION,
-        title = "Battery Full Detection",
-        description = "Detect when the battery is fully charged",
+        title = "@string/battery_full",
+        description = "@string/battery_description",
         icon = R.drawable.battery
     )
 )

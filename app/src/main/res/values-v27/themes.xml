@@ -1,0 +1,5 @@
+<resources>
+    <style name="Theme.AntiTheftDemo" parent="Base.Theme.AntiTheftDemo.Starting">
+        <item name="android:windowLightNavigationBar">true</item>
+    </style>
+</resources>

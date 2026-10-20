@@ -1,7 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <style name="Theme.AntiTheftDemo" parent="android:Theme.Material.Light.NoActionBar" />
+    <style name="Base.Theme.AntiTheftDemo.Starting" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="android:windowBackground">@android:color/white</item>
+        <item name="android:statusBarColor">@android:color/white</item>
+        <item name="android:navigationBarColor">@android:color/white</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
+    <style name="Theme.AntiTheftDemo" parent="Base.Theme.AntiTheftDemo.Starting" />
 
     <style name="Theme.AntiTheftDemo.Fullscreen" parent="Theme.AntiTheftDemo">
         <item name="android:actionBarStyle">@style/Widget.Theme.AntiTheftDemo.ActionBar.Fullscreen

@@ -1,5 +1,8 @@
 package com.example.antitheftdemo.pincode
 
+import com.example.antitheftdemo.language.userText
+import androidx.compose.ui.res.stringResource
+import com.example.antitheftdemo.R
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -30,7 +33,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.antitheftdemo.R
 
 
 @Composable
@@ -69,7 +71,7 @@ fun PinCodeScreen(
 
             Image(
                 painter = painterResource(id = R.drawable.pincode),
-                contentDescription = "PIN Illustration",
+                contentDescription = stringResource(R.string.pin_illustration),
                 modifier = Modifier
                     .height(200.dp)
                     .fillMaxWidth(0.6f),
@@ -79,7 +81,7 @@ fun PinCodeScreen(
             Spacer(modifier = Modifier.height(24.dp))
 
             Text(
-                text = viewModel.title,
+                text = userText(viewModel.title),
                 color = Color.White,
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold
@@ -113,7 +115,7 @@ fun PinCodeScreen(
 
             Spacer(modifier = Modifier.height(40.dp))
 
-            viewModel.error?.let { Text(it, color = Color.White) }
+            viewModel.error?.let { Text(userText(it), color = Color.White) }
 
             Button(
                 enabled = !viewModel.busy,
@@ -128,7 +130,7 @@ fun PinCodeScreen(
                     .height(48.dp)
             ) {
                 Text(
-                    text = viewModel.buttonText,
+                    text = userText(viewModel.buttonText),
                     color = Color(0xFF1976D2),
                     fontWeight = FontWeight.Bold,
                     fontSize = 16.sp

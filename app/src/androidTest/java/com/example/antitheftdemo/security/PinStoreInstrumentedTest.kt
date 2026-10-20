@@ -65,7 +65,7 @@ class PinStoreInstrumentedTest {
         assertFalse(preferences.onboardingComplete)
         preferences.saveLanguage("English")
         preferences.finishIntro()
-        assertEquals("English", AppPreferences(context).language)
+        assertEquals("en", AppPreferences(context).language)
         assertTrue(AppPreferences(context).introComplete)
         assertFalse(AppPreferences(context).permissionsReviewed)
         preferences.finishPermissions()
@@ -102,7 +102,61 @@ class PinStoreInstrumentedTest {
         assertTrue(saved.flash)
         assertFalse(saved.vibrate)
         assertEquals(PinResult.Verified, store.verify("2468"))
-        assertEquals("English", AppPreferences(context).language)
+        assertEquals("en", AppPreferences(context).language)
+    }
+    @Test fun languageCodesPersistWithoutResettingPinOrOnboarding() = runBlocking {
+        val pin = PinStore(context)
+        pin.create("2468")
+        AppPreferences(context).finishOnboarding()
+        for (code in listOf("en", "es", "fr", "hi", "de", "id", "pt")) {
+            AppPreferences(context).saveLanguage(code)
+            assertEquals(code, AppPreferences(context).language)
+            assertTrue(AppPreferences(context).onboardingComplete)
+        }
+        assertEquals(PinResult.Verified, pin.verify("2468"))
+    }
+    @Test fun translatedResourcesCoverHomeSettingsPinAndDetectionInAllLocales() {
+        val ids = listOf(com.example.antitheftdemo.R.string.settings, com.example.antitheftdemo.R.string.pin_verify,
+            com.example.antitheftdemo.R.string.app_title, com.example.antitheftdemo.R.string.proximity,
+            com.example.antitheftdemo.R.string.notifications_needed, com.example.antitheftdemo.R.string.audio_unavailable)
+        for (code in listOf("hi", "es", "fr", "de", "id", "pt")) {
+            val configuration = android.content.res.Configuration(target.resources.configuration).apply {
+                setLocale(java.util.Locale.forLanguageTag(code))
+            }
+            val localized = target.createConfigurationContext(configuration)
+            for (id in ids) {
+                assertTrue(localized.getString(id).isNotBlank())
+                assertNotEquals(target.createConfigurationContext(android.content.res.Configuration(configuration).apply {
+                    setLocale(java.util.Locale.ENGLISH)
+                }).getString(id), localized.getString(id))
+            }
+        }
+    }
+    @Test fun failedSettingsCommitRollsBackObservedValue() = runBlocking {
+        var rejectNext = true
+        val failingContext = object : ContextWrapper(context) {
+            override fun getApplicationContext(): Context = this
+            override fun getSharedPreferences(name: String, mode: Int): SharedPreferences {
+                val real = context.getSharedPreferences(name, mode)
+                return object : SharedPreferences by real {
+                    override fun edit(): SharedPreferences.Editor {
+                        val editor = real.edit()
+                        return object : SharedPreferences.Editor by editor {
+                            override fun commit(): Boolean {
+                                val committed = editor.commit()
+                                if (rejectNext) { rejectNext = false; return false }
+                                return committed
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        val repository = com.example.antitheftdemo.settings.SettingsRepository(failingContext)
+        try { repository.setFlash(true); fail("Failed persistence must be reported") }
+        catch (_: IllegalStateException) { }
+        assertFalse(repository.current.flash)
+        assertFalse(com.example.antitheftdemo.settings.SettingsRepository(context).current.flash)
     }
     @Test fun allFourAlarmResourcesAreDistinctAndDecodeAsAudio() {
         val hashes = mutableSetOf<String>()

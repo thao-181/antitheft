@@ -1,5 +1,8 @@
 package com.example.antitheftdemo.home
 
+import com.example.antitheftdemo.language.userText
+import androidx.compose.ui.res.stringResource
+import com.example.antitheftdemo.R
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -70,14 +73,14 @@ fun HomeScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Anti Theft Alarm",
+                    text = stringResource(R.string.app_title),
                     fontSize = 28.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.Black
                 )
 
                 IconButton(onClick = onSettingsClick) {
-                    Icon(Icons.Outlined.Settings, contentDescription = "Settings", tint = Color.Black,
+                    Icon(Icons.Outlined.Settings, contentDescription = stringResource(R.string.settings), tint = Color.Black,
                         modifier = Modifier.size(28.dp))
                 }
             }
@@ -92,14 +95,14 @@ fun HomeScreen(
             // --- NỘI DUNG LƯỚI ---
             snapshot.type?.let { type ->
                 TextButton(onClick = { listItem.firstOrNull { it.type == type }?.let(onNavigation) }) {
-                    Text(if (snapshot.alarming) "Alarm triggered - open protection to enter PIN"
-                        else if (snapshot.starting) "Starting protection..."
-                        else "Protection active: ${listItem.first { it.type == type }.title}")
+                    Text(userText(if (snapshot.alarming) "@string/alarm_home"
+                        else if (snapshot.starting) "@string/starting_protection"
+                        else "@string/protection_active"))
                 }
             }
-            snapshot.message?.let { Text(it, color = Color(0xFFEF4444), modifier = Modifier.padding(horizontal = 20.dp)) }
-            if (snapshot.message?.startsWith("Allow notifications") == true) {
-                TextButton(onClick = onNotificationPermissionClick) { Text("Review notification permission") }
+            snapshot.message?.let { Text(userText(it), color = Color(0xFFEF4444), modifier = Modifier.padding(horizontal = 20.dp)) }
+            if (snapshot.message == "@string/notification_required") {
+                TextButton(onClick = onNotificationPermissionClick) { Text(stringResource(R.string.review_notifications)) }
             }
             HomeContent(
                 modifier = Modifier.weight(1f)
@@ -173,13 +176,13 @@ fun ItemContent(homeItem: HomeItem, onClick: (HomeItem) -> Unit) {
                     .size(90.dp)
                     .padding(bottom = 12.dp),
                 painter = painterResource(homeItem.icon),
-                contentDescription = homeItem.title
+                contentDescription = userText(homeItem.title)
             )
 
             // Tiêu đề chức năng
             Text(
                 modifier = Modifier.fillMaxWidth(),
-                text = homeItem.title,
+                text = userText(homeItem.title),
                 textAlign = TextAlign.Center,
                 style = TextStyle(
                     color = if (homeItem.isSelected) Color.White else Color(0xFF2C3E50),
@@ -193,7 +196,7 @@ fun ItemContent(homeItem: HomeItem, onClick: (HomeItem) -> Unit) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = 4.dp),
-                text = homeItem.description,
+                text = userText(homeItem.description),
                 textAlign = TextAlign.Center,
                 style = TextStyle(
                     color = if (homeItem.isSelected) Color(0xFFE3F2FD) else Color(0xFF7F8C8D),

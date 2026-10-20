@@ -28,15 +28,15 @@ object DetectionRepository {
         val prefs = context.getSharedPreferences("monitor_runtime", Context.MODE_PRIVATE)
         val interrupted = prefs.getString("active_type", null)
         if (interrupted != null) {
-            controller.message("Previous monitoring was interrupted. Activate protection again.")
+            controller.message("@string/interrupted")
             prefs.edit().remove("active_type").apply()
         }
     }
     fun activate(context: Context, type: HomeItemType) {
         initialize(context)
-        if (!PinStore(context).hasPin) { controller.message("Create a PIN before activating protection."); return }
+        if (!PinStore(context).hasPin) { controller.message("@string/pin_required"); return }
         if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) {
-            controller.message("Allow notifications in Permissions before activating monitoring."); return
+            controller.message("@string/notification_required"); return
         }
         val session = controller.request(type) ?: return
         com.example.antitheftdemo.alarm.AlarmPreview.stop()
@@ -45,9 +45,9 @@ object DetectionRepository {
                 .putExtra("session", session).putExtra("type", type.name))
             handler.postDelayed({
                 if (state.value.session == session && state.value.starting)
-                    failed(session, "Monitoring service did not start. Please retry from the app.")
+                    failed(session, "@string/service_start_error")
             }, 10_000)
-        } catch (_: Exception) { failed(session, "Android did not allow monitoring to start. Retry while the app is visible.") }
+        } catch (_: Exception) { failed(session, "@string/service_not_allowed") }
     }
     fun attach(session: String, stop: (String?) -> Unit): Boolean {
         if (state.value.session != session || !state.value.starting) return false

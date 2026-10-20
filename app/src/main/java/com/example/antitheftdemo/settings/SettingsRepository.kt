@@ -3,6 +3,8 @@ package com.example.antitheftdemo.settings
 import android.content.Context
 import android.content.SharedPreferences
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.conflate
@@ -23,6 +25,16 @@ class SettingsRepository(context: Context) {
     suspend fun setFlash(enabled: Boolean) = save { putBoolean("flash", enabled) }
     suspend fun setVibrate(enabled: Boolean) = save { putBoolean("vibrate", enabled) }
     private suspend fun save(change: SharedPreferences.Editor.() -> Unit) = withContext(Dispatchers.IO) {
-        check(preferences.edit().apply(change).commit()) { "Cannot save alarm settings" }
+        writeMutex.withLock {
+            val before = current
+            if (!preferences.edit().apply(change).commit()) {
+                // commit() updates SharedPreferences memory even when disk persistence fails.
+                // Roll back that memory too, so observers do not claim an unsaved value.
+                preferences.edit().putInt("tone", before.tone.id).putBoolean("flash", before.flash)
+                    .putBoolean("vibrate", before.vibrate).commit()
+                error("Cannot save alarm settings")
+            }
+        }
     }
+    companion object { private val writeMutex = Mutex() }
 }

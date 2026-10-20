@@ -1,15 +1,14 @@
 <resources>
-    <string name="app_name">AntiTheftDemo</string>
-    <string name="title_activity_language_screen">LanguageScreen</string>
-    <string name="dummy_button">Dummy Button</string>
-    <string name="dummy_content">Fullscreen\nContent</string>
+    <string name="app_name" translatable="false">AntiTheftDemo</string>
+    <string name="title_activity_language_screen" translatable="false">LanguageScreen</string>
+    <string name="dummy_button" translatable="false">Dummy Button</string>
+    <string name="dummy_content" translatable="false">Fullscreen\nContent</string>
     <!-- Strings used for fragments for navigation -->
-    <string name="first_fragment_label">First Fragment</string>
-    <string name="second_fragment_label">Second Fragment</string>
-    <string name="next">Next</string>
-    <string name="previous">Previous</string>
+    <string name="first_fragment_label" translatable="false">First Fragment</string>
+    <string name="second_fragment_label" translatable="false">Second Fragment</string>
+    <string name="previous" translatable="false">Previous</string>
 
-    <string name="lorem_ipsum">
+    <string name="lorem_ipsum" translatable="false">
         Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nam in scelerisque sem. Mauris
         volutpat, dolor id interdum ullamcorper, risus dolor egestas lectus, sit amet mattis purus
         dui nec risus. Maecenas non sodales nisi, vel dictum dolor. Class aptent taciti sociosqu ad
@@ -45,4 +44,121 @@
         libero vel nunc consequat, quis tincidunt nisl eleifend. Cras bibendum enim a justo luctus
         vestibulum. Fusce dictum libero quis erat maximus, vitae volutpat diam dignissim.
     </string>
+    <string name="app_title">Anti Theft Alarm</string>
+    <string name="settings">Settings</string>
+    <string name="language">Language</string>
+    <string name="permission">Permission</string>
+    <string name="back">Back</string>
+    <string name="next">Next</string>
+    <string name="continue_action">Continue</string>
+    <string name="save_language">Save Language</string>
+    <string name="retry">Retry</string>
+    <string name="cannot_save">Cannot save</string>
+    <string name="save_setup_error">Cannot save setup. Please retry.</string>
+    <string name="save_language_error">Cannot save language. Please retry.</string>
+    <string name="save_settings_error">Cannot save settings. Please retry.</string>
+    <string name="pin_code">PIN Code</string>
+    <string name="pin_subtitle">Create your PIN Code</string>
+    <string name="alarm_tone">Alarm Tone</string>
+    <string name="tone_subtitle">Customize Alarm Tone</string>
+    <string name="language_subtitle">Choose Your Language</string>
+    <string name="flash_light">Flash Light</string>
+    <string name="flash_subtitle">Flash Mode Off/On</string>
+    <string name="vibrate">Vibrate</string>
+    <string name="vibrate_subtitle">Vibrate Mode Off/On</string>
+    <string name="tone_1">Alarm tone 1</string>
+    <string name="tone_2">Alarm tone 2</string>
+    <string name="tone_3">Alarm tone 3</string>
+    <string name="tone_4">Alarm tone 4</string>
+    <string name="cancel">Cancel</string>
+    <string name="ok">Ok</string>
+    <string name="preview_armed">Preview is unavailable while protection is armed.</string>
+    <string name="preview_error">Tone preview is unavailable under the current audio policy.</string>
+    <string name="pin_verify">Enter your 4 digit PIN Code</string>
+    <string name="pin_create">Create new PIN</string>
+    <string name="pin_confirm">Confirm new PIN</string>
+    <string name="check">Check</string>
+    <string name="create">Create</string>
+    <string name="submit">Submit</string>
+    <string name="pin_digits">Enter exactly 4 digits</string>
+    <string name="pin_mismatch">PINs do not match. Please confirm again.</string>
+    <string name="pin_locked">Too many attempts. Try again in %1$s seconds.</string>
+    <string name="pin_incorrect">Incorrect PIN</string>
+    <string name="pin_save_error">Cannot save PIN. Verify your current PIN again.</string>
+    <string name="pin_storage_error">Cannot access PIN storage. Please retry.</string>
+    <string name="pin_illustration">PIN Illustration</string>
+    <string name="proximity">Proximity Detection</string>
+    <string name="motion">Motion Detection</string>
+    <string name="charger">Charger Detection</string>
+    <string name="handsfree">Handsfree Detection</string>
+    <string name="wifi">Wi-Fi Detection</string>
+    <string name="battery_full">Battery Full Detection</string>
+    <string name="proximity_description">Detected when taken out of the bag</string>
+    <string name="motion_description">Detect when the device is moved</string>
+    <string name="charger_description">Alert when the charger is disconnected</string>
+    <string name="handsfree_description">Alert when connected headphones are disconnected</string>
+    <string name="wifi_description">Alert when Wi-Fi is turned off or disconnected</string>
+    <string name="battery_description">Detect when the battery is fully charged</string>
+    <string name="tap_active">Tap to active</string>
+    <string name="tap_deactivate">Tap to deactivate</string>
+    <string name="tap_stop">Tap to stop</string>
+    <string name="activate_protection">Activate protection</string>
+    <string name="secured">Protection secured</string>
+    <string name="stop_protection">Stop protection</string>
+    <string name="reset_protection">Reset protection</string>
+    <string name="deactivate">Deactivate</string>
+    <string name="starting_monitor">Starting monitoring...</string>
+    <string name="alarm_playing">Alarm playing - enter PIN to stop</string>
+    <string name="alarm_failed">Alarm sound unavailable - enter PIN to stop</string>
+    <string name="alarm_suspended">Alarm audio paused or muted by Android - enter PIN to stop</string>
+    <string name="alarm_starting">Starting alarm - enter PIN to stop</string>
+    <string name="alarm_home">Alarm triggered - open protection to enter PIN</string>
+    <string name="starting_protection">Starting protection...</string>
+    <string name="protection_active">Protection active</string>
+    <string name="review_notifications">Review notification permission</string>
+    <string name="intro_theft">Anti-pickpocket detection</string>
+    <string name="intro_theft_description">Theft detection is optimized to protect your phone</string>
+    <string name="intro_battery">Full battery detection</string>
+    <string name="intro_battery_description">When the battery is fully charged, it will make a sound to let you know the battery is fully charged</string>
+    <string name="intro_wifi_description">When the Wi-Fi connection is changed, it will alert you with a wonderful alarm sound</string>
+    <string name="permission_description">This app needs permissions below to work properly</string>
+    <string name="allow_access">Allow access</string>
+    <string name="notifications_allowed">Notifications allowed. Monitoring can show its status.</string>
+    <string name="notifications_needed">Allow notifications to activate background monitoring. You can continue setup without granting it.</string>
+    <string name="permission_denied">Permission denied. Retry or enable notifications in App Settings.</string>
+    <string name="app_settings">App Settings</string>
+    <string name="splash_ad">This action may contain advertising</string>
+    <string name="other_mode">Deactivate the current mode with PIN first.</string>
+    <string name="interrupted">Previous monitoring was interrupted. Activate protection again.</string>
+    <string name="pin_required">Create a PIN before activating protection.</string>
+    <string name="notification_required">Allow notifications in Permissions before activating monitoring.</string>
+    <string name="service_start_error">Monitoring service did not start. Please retry from the app.</string>
+    <string name="service_not_allowed">Android did not allow monitoring to start. Retry while the app is visible.</string>
+    <string name="channel_blocked">Monitoring notification channel is blocked. Enable it in App Settings.</string>
+    <string name="audio_unavailable">Alarm sound unavailable. Monitoring remains armed; enter PIN to deactivate.</string>
+    <string name="monitor_channel">Anti-theft monitoring</string>
+    <string name="monitor_channel_description">Visible while a user-activated protection mode is monitoring</string>
+    <string name="audio_unavailable_title">Alarm sound unavailable</string>
+    <string name="audio_suspended_title">Alarm audio paused or muted</string>
+    <string name="alarm_triggered">Alarm triggered</string>
+    <string name="notification_open">Tap to enter PIN and deactivate</string>
+    <string name="open_protection">Open protection</string>
+    <string name="service_stopped">Monitoring service was stopped by Android. Activate protection again.</string>
+    <string name="no_flash">This device has no camera flash.</string>
+    <string name="flash_busy">Flash is unavailable while the camera is in use.</string>
+    <string name="flash_owned">Flash is already in use. Alarm sound and monitoring remain active.</string>
+    <string name="flash_unavailable">Flash is restricted or unavailable. Monitoring remains active.</string>
+    <string name="no_vibrator">This device does not support vibration.</string>
+    <string name="vibration_unavailable">Vibration is unavailable or restricted by Android. Monitoring remains active.</string>
+    <string name="battery_unavailable">Battery information unavailable</string>
+    <string name="charger_required">Connect a charger before activating this mode.</string>
+    <string name="sensor_missing">This device does not have the required sensor.</string>
+    <string name="sensor_register">Cannot register the sensor listener.</string>
+    <string name="sensor_stopped">Sensor stopped delivering data. Monitoring stopped.</string>
+    <string name="sensor_disconnected">Sensor disconnected. Monitoring stopped.</string>
+    <string name="headphones_required">Connect wired or Bluetooth headphones before activating this mode.</string>
+    <string name="wifi_required">Enable Wi-Fi before activating this mode.</string>
+    <string name="active_label">ACTIVE</string>
+    <string name="secured_label">SECURED</string>
+    <string name="stop_label">STOP</string>
 </resources>

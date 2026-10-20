@@ -1,5 +1,8 @@
 package com.example.antitheftdemo.language
 
+import com.example.antitheftdemo.language.userText
+import androidx.compose.ui.res.stringResource
+import com.example.antitheftdemo.R
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -45,7 +48,7 @@ fun LanguageScreen(
     initialLanguage: String? = null,
     onSaveClick: (LanguageItem) -> Unit = {}
 ) {
-    var selectedLanguage by remember { mutableStateOf(listItem.find { it.title == initialLanguage }) }
+    var selectedLanguage by remember { mutableStateOf(listItem.find { it.code == LanguageCodes.code(initialLanguage) }) }
 
     Surface(
         modifier = modifier.fillMaxSize(),
@@ -62,7 +65,7 @@ fun LanguageScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Language",
+                    text = stringResource(R.string.language),
                     fontSize = 24.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.Black
@@ -76,7 +79,7 @@ fun LanguageScreen(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Check,
-                        contentDescription = "Save Language",
+                        contentDescription = stringResource(R.string.save_language),
                         // Nếu chưa chọn thì mờ đi, chọn rồi thì hiện màu xanh dương
                         tint = if (selectedLanguage != null) Color(0xFF0075FF) else Color.Gray.copy(
                             alpha = 0.5f
@@ -142,14 +145,17 @@ fun LanguageItemView(
     ) {
         Image(
             painter = painterResource(id = item.icon),
-            contentDescription = item.title,
+            contentDescription = userText(item.title),
             modifier = Modifier.size(24.dp)
         )
 
         Spacer(modifier = Modifier.width(16.dp))
 
         Text(
-            text = item.title,
+            text = when (item.code) {
+                "hi" -> "??????"; "es" -> "Espa?ol"; "fr" -> "Fran?ais"; "de" -> "Deutsch"
+                "id" -> "Bahasa Indonesia"; "pt" -> "Portugu?s"; else -> "English"
+            },
             fontSize = 16.sp,
             fontWeight = FontWeight.Medium,
             color = Color.Black

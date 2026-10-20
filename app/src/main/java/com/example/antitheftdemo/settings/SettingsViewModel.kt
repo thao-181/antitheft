@@ -28,7 +28,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             try { operation(); error = null; onSaved() }
             catch (cancelled: CancellationException) { throw cancelled }
-            catch (_: Exception) { error = "Cannot save settings. Please retry." }
+            catch (_: Exception) { error = "@string/save_settings_error" }
             finally { saving = false }
         }
     }

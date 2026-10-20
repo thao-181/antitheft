@@ -33,6 +33,21 @@ import com.example.antitheftdemo.detection.monitor.AndroidMonitor
 import com.example.antitheftdemo.home.HomeItemType
 
 class MonitoringService : Service() {
+    private val localePreferences by lazy { getSharedPreferences("setup", MODE_PRIVATE) }
+    private val localeListener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        if (key == "language") scope.launch { refreshNotificationLocale() }
+    }
+    override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
+        super.onConfigurationChanged(newConfig)
+        refreshNotificationLocale()
+    }
+    private fun refreshNotificationLocale() {
+        if (session != null && !finishing) {
+            createChannel()
+            getSystemService(NotificationManager::class.java).notify(NOTIFICATION,
+                notification(DetectionRepository.state.value.alarming))
+        }
+    }
     private var session: String? = null
     private var mode: HomeItemType? = null
     private var monitor: AndroidMonitor? = null
@@ -53,10 +68,11 @@ class MonitoringService : Service() {
         session = id
         mode = type
         try {
+            localePreferences.registerOnSharedPreferenceChangeListener(localeListener)
             createChannel()
             if (Build.VERSION.SDK_INT >= 26) {
                 check(getSystemService(NotificationManager::class.java).getNotificationChannel(CHANNEL).importance != NotificationManager.IMPORTANCE_NONE) {
-                    "Monitoring notification channel is blocked. Enable it in App Settings."
+                    "@string/channel_blocked"
                 }
             }
             ServiceCompat.startForeground(this, NOTIFICATION, notification(false),
@@ -79,7 +95,7 @@ class MonitoringService : Service() {
             monitor!!.start(type, { trigger(id) }, { finishMonitoring(it) })
             DetectionRepository.started(this, id)
         } catch (error: Exception) {
-            finishMonitoring(error.message ?: "Cannot start monitoring service.")
+            finishMonitoring(error.message?.takeIf { it.startsWith("@string/") } ?: "@string/service_start_error")
         }
         return START_NOT_STICKY
     }
@@ -112,14 +128,14 @@ class MonitoringService : Service() {
         if (finishing) return
         alarm?.stop()
         session?.let { DetectionRepository.controller.playback(it, AlarmStatus.FAILED) }
-        DetectionRepository.controller.message("Alarm sound unavailable. Monitoring remains armed; enter PIN to deactivate.")
+        DetectionRepository.controller.message("@string/audio_unavailable")
         getSystemService(NotificationManager::class.java).notify(NOTIFICATION, notification(true))
     }
     private fun createChannel() {
         if (Build.VERSION.SDK_INT >= 26) {
             getSystemService(NotificationManager::class.java).createNotificationChannel(
-                NotificationChannel(CHANNEL, "Anti-theft monitoring", NotificationManager.IMPORTANCE_LOW).apply {
-                    description = "Visible while a user-activated protection mode is monitoring"
+                NotificationChannel(CHANNEL, com.example.antitheftdemo.language.AppLocale.text(this, "@string/monitor_channel"), NotificationManager.IMPORTANCE_LOW).apply {
+                    description = com.example.antitheftdemo.language.AppLocale.text(this@MonitoringService, "@string/monitor_channel_description")
                     setSound(null, null)
                 })
         }
@@ -130,24 +146,25 @@ class MonitoringService : Service() {
             putExtra("monitor_session", session)
         }
         val pending = PendingIntent.getActivity(this, 1, open, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-        val name = mode?.name?.lowercase()?.replace('_', ' ') ?: "Anti-theft"
+        val name = mode?.let { com.example.antitheftdemo.home.listItem.first { item -> item.type == it }.title } ?: "@string/app_title"
         return NotificationCompat.Builder(this, CHANNEL)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
-            .setContentTitle(when {
-                DetectionRepository.state.value.alarmStatus == AlarmStatus.FAILED -> "Alarm sound unavailable"
-                DetectionRepository.state.value.alarmStatus == AlarmStatus.SUSPENDED -> "Alarm audio paused or muted"
-                alarming -> "Alarm triggered"
-                else -> "Protection active"
-            })
-            .setContentText("$name - tap to enter PIN and deactivate")
+            .setContentTitle(com.example.antitheftdemo.language.AppLocale.text(this, when {
+                DetectionRepository.state.value.alarmStatus == AlarmStatus.FAILED -> "@string/audio_unavailable_title"
+                DetectionRepository.state.value.alarmStatus == AlarmStatus.SUSPENDED -> "@string/audio_suspended_title"
+                alarming -> "@string/alarm_triggered"
+                else -> "@string/protection_active"
+            }))
+            .setContentText(com.example.antitheftdemo.language.AppLocale.text(this, name) + " - " + com.example.antitheftdemo.language.AppLocale.text(this, "@string/notification_open"))
             .setContentIntent(pending)
-            .addAction(0, "Open protection", pending)
+            .addAction(0, com.example.antitheftdemo.language.AppLocale.text(this, "@string/open_protection"), pending)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setOngoing(true).setOnlyAlertOnce(true).setSilent(true).build()
     }
     private fun finishMonitoring(message: String?) {
         if (finishing) return
         finishing = true
+        localePreferences.unregisterOnSharedPreferenceChangeListener(localeListener)
         scope.cancel()
         monitor?.stop()
         monitor = null
@@ -162,11 +179,11 @@ class MonitoringService : Service() {
         session?.let { DetectionRepository.ended(this, it, message) }
     }
     override fun onDestroy() {
-        finishMonitoring("Monitoring service was stopped by Android. Activate protection again.")
+        finishMonitoring("@string/service_stopped")
         super.onDestroy()
     }
     override fun onTimeout(startId: Int, fgsType: Int) {
-        finishMonitoring("Android ended the monitoring service. Activate protection again.")
+        finishMonitoring("@string/service_stopped")
     }
     companion object {
         const val CHANNEL = "antitheft_monitoring"

@@ -14,7 +14,7 @@ Updated 2026-10-20 after phased implementation. See UPDATE_REPORT.md for the lat
 - MainActivity -> AppNavigation -> Splash -> first unfinished setup step: Language -> Intro -> Permission -> PIN create/confirm -> Home.
 - AppPreferences stores language choice and setup checkpoints. Returning users go Splash -> Home. Completed setup destinations are removed from the back stack.
 - Settings icon opens SettingsScreen: PIN Code, Alarm Tone, Language, Flash Light and Vibrate. No Other section. Language returns to Settings. Permission review remains available from the Home notification-permission error.
-- Language choice is saved/preselected; translations were not provided, so UI strings remain English.
+- Language is translated through Android resources for en/hi/es/fr/de/id/pt. AppCompatActivity applies per-app locale, migrates legacy names to codes, and recreates UI. Context-free resource references are resolved at presentation; service notifications use a fresh localized application configuration.
 - Figma was inaccessible. Existing visuals are the design baseline; exact design matching is unverified.
 
 ## PIN security
@@ -31,7 +31,7 @@ Updated 2026-10-20 after phased implementation. See UPDATE_REPORT.md for the lat
 - DetectionScreen -> DetectionViewModel -> application-scoped DetectionRepository -> MonitoringService -> AndroidMonitor -> AlarmController/AndroidAlarmPlayback.
 - DetectionController is pure Kotlin with StateFlow. UI states ACTIVE, SECURED, STOP are distinct from starting, monitoring and actual alarm playback states.
 - One armed mode at a time. Another mode cannot replace it without PIN deactivation. Screen changes do not own monitoring resources.
-- ACTIVE tap requests service; SECURED only after registration succeeds. Deactivate -> stop_confirmation route (red UI, still SECURED) -> red circle opens PIN -> one-use proof stops resources/notification -> Home. Back from PIN returns confirmation; Back from confirmation returns SECURED. No automatic activation after stop.
+- ACTIVE tap requests service; SECURED only after registration succeeds. Deactivate -> PIN -> authorized red STOP (monitoring/alarm continue) -> red circle consumes a session-bound, one-use 60-second proof -> cleanup -> Home. Back/background revokes unused stop authorization. Ended sessions reset to ACTIVE for reopening, without rearming.
 - Six implementations: proximity near-to-far, filtered accelerometer motion, charger disconnect, loss of headphone outputs, Wi-Fi adapter/network loss, full-battery crossing.
 - Initial observations are baselines. Battery is single-trigger per charging cycle. Network/headphone handoffs are debounced. Sensor support/registration errors surface without false SECURED UI.
 - BroadCastDetection/Manager are service-owned managed receiver helpers. Screens do not register receivers. No manifest-exported receiver remains.
@@ -48,9 +48,9 @@ Updated 2026-10-20 after phased implementation. See UPDATE_REPORT.md for the lat
 ## Validation
 
 - Gradle Wrapper assembleDebug, testDebugUnitTest and lintDebug have passed after phased changes. Lint has zero errors; legacy/resource/dependency warnings remain.
-- Current tests include PIN-change authorizations, original encrypted-PIN compatibility, STOP confirmation, effects and audibility, settings persistence and four-resource decoding. Current results are in UPDATE_REPORT.md.
+- Current tests include PIN-change authorizations, original encrypted-PIN compatibility, STOP confirmation, effects and audibility, settings persistence and four-resource decoding. Current results are in SIX_ISSUES_REPORT.md.
 - scripts/settings_flow_smoke.py targets only com.example.antitheftdemo.validation on an emulator. A temporary Gradle init script builds that separate app ID without changing source build settings. Existing application PIN/data are not cleared or reset.
-- Final emulator smoke outcomes and current test counts are in UPDATE_REPORT.md. Physical sensors/headsets/OEM background behavior still need the documented hardware checks.
+- Final emulator smoke outcomes and current test counts are in SIX_ISSUES_REPORT.md. Physical sensors/headsets/OEM background behavior still need the documented hardware checks.
 
 - PIN setting uses PinStore.authorizeChange/replace: old PIN verification, an expiring verifier-bound one-use grant, then Create/Confirm. It never issues a monitoring stop proof.
 - Latest user instruction explicitly forbids commit/push for this update, overriding earlier standing auto-push authorization.

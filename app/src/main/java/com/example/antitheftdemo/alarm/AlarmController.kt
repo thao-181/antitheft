@@ -18,7 +18,7 @@ class AlarmController(private val playback: AlarmPlayback) {
         stop()
         session = id
         try { playback.start(onState, onFailure) }
-        catch (_: Exception) { stop(); onFailure("Cannot play alarm audio.") }
+        catch (_: Exception) { stop(); onFailure("@string/audio_unavailable") }
     }
     fun applySettings(settings: AlarmSettings) { playback.applySettings(settings) }
     fun stop() {
