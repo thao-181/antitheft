@@ -153,8 +153,13 @@ fun LanguageItemView(
 
         Text(
             text = when (item.code) {
-                "hi" -> "??????"; "es" -> "Espa?ol"; "fr" -> "Fran?ais"; "de" -> "Deutsch"
-                "id" -> "Bahasa Indonesia"; "pt" -> "Portugu?s"; else -> "English"
+                "hi" -> "हिन्दी"
+                "es" -> "Español"
+                "fr" -> "Français"
+                "de" -> "Deutsch"
+                "id" -> "Bahasa Indonesia"
+                "pt" -> "Português"
+                else -> "English"
             },
             fontSize = 16.sp,
             fontWeight = FontWeight.Medium,
