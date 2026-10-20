@@ -1,4 +1,4 @@
-package com.example.antitheftdemo.screen.home
+package com.example.antitheftdemo.home
 
 import com.example.antitheftdemo.R
 
@@ -18,37 +18,37 @@ data class HomeItem(
 var listItem = listOf(
     HomeItem(
         type = HomeItemType.PROXIMITY_DETECTION,
-        title = "Proximily Detection",
+        title = "Proximity Detection",
         description = "Detected when taken out of the bag",
         icon = R.drawable.proximily
     ),
     HomeItem(
         type = HomeItemType.MOTION_DETECTION,
-        title = "Motion detection",
+        title = "Motion Detection",
         description = "Detect when the device is moved",
         icon = R.drawable.motion
     ),
     HomeItem(
         type = HomeItemType.CHARGER_DETECTION,
-        title = "Changer detection",
-        description = "Intruder alert detected when taken out of the bag",
+        title = "Charger Detection",
+        description = "Alert when the charger is disconnected",
         icon = R.drawable.changer
     ),
     HomeItem(
         type = HomeItemType.HANDSFREE_DETECTION,
-        title = "Handsfree detection",
-        description = "Detect when phone is plugged in handsfree",
+        title = "Handsfree Detection",
+        description = "Alert when connected headphones are disconnected",
         icon = R.drawable.handsfree
     ),
     HomeItem(
         type = HomeItemType.WIFI_DETECTION,
-        title = "wi-fi detection",
-        description = "Detect when wifi status is connected",
+        title = "Wi-Fi Detection",
+        description = "Alert when Wi-Fi is turned off or disconnected",
         icon = R.drawable.wifi
     ),
     HomeItem(
         type = HomeItemType.BATTERY_FULL_DETECTION,
-        title = "Battery full detection",
+        title = "Battery Full Detection",
         description = "Detect when the battery is fully charged",
         icon = R.drawable.battery
     )

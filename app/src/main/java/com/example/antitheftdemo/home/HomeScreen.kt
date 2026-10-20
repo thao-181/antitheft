@@ -1,6 +1,5 @@
-package com.example.antitheftdemo.screen.home
+package com.example.antitheftdemo.home
 
-import android.content.Intent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -20,7 +19,13 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material3.Divider
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.HorizontalDivider
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.antitheftdemo.detection.DetectionRepository
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -34,7 +39,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -42,16 +46,17 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.antitheftdemo.receiver.BroadCastDetection
 
 // --- 1. MÀN HÌNH CHÍNH (Chứa Tiêu đề + Nội dung lưới) ---
 @Composable
 fun HomeScreen(
     modifier: Modifier = Modifier,
-    onNavigation: () -> Unit = {}
+    onLanguageClick: () -> Unit = {},
+    onPermissionClick: () -> Unit = {},
+    onNavigation: (HomeItem) -> Unit = {}
 ) {
-    val context = LocalContext.current
-    val broadcastReceiver = remember { BroadCastDetection() }
+    var settingsExpanded by remember { mutableStateOf(false) }
+    val snapshot by DetectionRepository.state.collectAsStateWithLifecycle()
 
     Surface(
         modifier = modifier.fillMaxSize(),
@@ -74,32 +79,42 @@ fun HomeScreen(
                     color = Color.Black
                 )
 
-                Icon(
-                    imageVector = Icons.Outlined.Settings,
-                    contentDescription = "Settings",
-                    modifier = Modifier.size(28.dp),
-                    tint = Color.Black
-                )
+                Box {
+                    IconButton(onClick = { settingsExpanded = true }) {
+                        Icon(Icons.Outlined.Settings, contentDescription = "Settings", tint = Color.Black,
+                            modifier = Modifier.size(28.dp))
+                    }
+                    DropdownMenu(expanded = settingsExpanded, onDismissRequest = { settingsExpanded = false }) {
+                        DropdownMenuItem(text = { Text("Language") }, onClick = {
+                            settingsExpanded = false; onLanguageClick()
+                        })
+                        DropdownMenuItem(text = { Text("Permission") }, onClick = {
+                            settingsExpanded = false; onPermissionClick()
+                        })
+                    }
+                }
             }
 
             // --- ĐƯỜNG KẺ MÀU TÍM ---
-            Divider(
+            HorizontalDivider(
                 color = Color(0xFF9D65FF),
                 thickness = 2.dp,
                 modifier = Modifier.fillMaxWidth()
             )
 
             // --- NỘI DUNG LƯỚI ---
+            snapshot.type?.let { type ->
+                TextButton(onClick = { listItem.firstOrNull { it.type == type }?.let(onNavigation) }) {
+                    Text(if (snapshot.alarming) "Alarm triggered - open protection to enter PIN"
+                        else if (snapshot.starting) "Starting protection..."
+                        else "Protection active: ${listItem.first { it.type == type }.title}")
+                }
+            }
+            snapshot.message?.let { Text(it, color = Color(0xFFEF4444), modifier = Modifier.padding(horizontal = 20.dp)) }
             HomeContent(
                 modifier = Modifier.weight(1f)
             ) { selectedItem ->
-                // ĐÃ SỬA: Đổi tên tham số thành 'broadCastDetection' cho khớp y hệt với hàm của bạn
-                broadcastReceiver.listen(
-                    context = context,
-                    intent = Intent(),
-                    homeItem = selectedItem,
-                    broadCastDetection = broadcastReceiver
-                )
+                onNavigation(selectedItem)
             }
         }
     }

@@ -1,7 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-feature android:name="android.hardware.sensor.proximity" android:required="false" />
+    <uses-feature android:name="android.hardware.sensor.accelerometer" android:required="false" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
     <application
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
@@ -11,36 +20,29 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.AntiTheftDemo">
+
         <activity
             android:name=".MainActivity"
-            android:exported="true"
-            android:label="@string/app_name"
-            android:theme="@style/Theme.AntiTheftDemo">
+            android:launchMode="singleTop"
+            android:exported="true">
+
             <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-
-                <category android:name="android.intent.category.LAUNCHER" />
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+
         </activity>
-        <activity
-            android:name=".screen.stop.DetectionActivity"
-            android:enabled="true"
-            android:exported="true" />
 
-        <receiver
-            android:name=".receiver.BroadCastDetection"
-            android:enabled="true"
-            android:exported="true" />
 
-        <activity
-            android:name=".language.Language"
+
+        <service
+            android:name=".detection.service.MonitoringService"
             android:exported="false"
-            android:theme="@style/Theme.AntiTheftDemo"
-            android:windowSoftInputMode="adjustResize" />
-        <activity
-            android:name=".language.LanguageScreen"
-            android:exported="false"
-            android:windowSoftInputMode="adjustResize" />
+            android:foregroundServiceType="specialUse"
+            android:stopWithTask="false">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="User-armed anti-theft monitoring of device motion, proximity, charging, headphones, Wi-Fi or full battery; requires continuous observation until PIN-authenticated deactivation." />
+        </service>
     </application>
 
 </manifest>

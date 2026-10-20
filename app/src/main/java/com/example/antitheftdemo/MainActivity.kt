@@ -1,47 +1,41 @@
 package com.example.antitheftdemo
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
-import androidx.navigation.compose.rememberNavController
-import com.example.antitheftdemo.screen.home.HomeScreen
-import com.example.antitheftdemo.screen.nav.NavRoot
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import com.example.antitheftdemo.detection.DetectionRepository
+import com.example.antitheftdemo.navigation.AppNavigation
 import com.example.antitheftdemo.ui.theme.AntiTheftDemoTheme
 
 class MainActivity : ComponentActivity() {
+    private var notificationSession by mutableStateOf<String?>(null)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        DetectionRepository.initialize(applicationContext)
+        notificationSession = if (savedInstanceState?.getBoolean("notification_handled") == true) null
+            else intent?.getStringExtra("monitor_session")
         setContent {
             AntiTheftDemoTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    NavRoot (navHostController = rememberNavController())
+                AppNavigation(notificationSession) {
+                    notificationSession = null
+                    intent?.removeExtra("monitor_session")
                 }
             }
         }
     }
-}
-
-@Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
-    Text(
-        text = "Hello $name!",
-        modifier = modifier
-    )
-}
-
-@Preview(showBackground = true)
-@Composable
-fun GreetingPreview() {
-    AntiTheftDemoTheme {
-        Greeting("Android")
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putBoolean("notification_handled", notificationSession == null)
+        super.onSaveInstanceState(outState)
+    }
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        notificationSession = intent.getStringExtra("monitor_session")
     }
 }
