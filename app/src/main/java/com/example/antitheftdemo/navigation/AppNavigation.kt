@@ -5,8 +5,6 @@ import androidx.compose.ui.res.stringResource
 import com.example.antitheftdemo.R
 import com.example.antitheftdemo.alarm.AlarmPreview
 import androidx.lifecycle.LifecycleEventObserver
-import androidx.activity.compose.BackHandler
-import kotlinx.coroutines.delay
 import com.example.antitheftdemo.settings.SettingsScreen
 import com.example.antitheftdemo.settings.SettingsViewModel
 import android.content.pm.PackageManager
@@ -25,22 +23,14 @@ import kotlinx.coroutines.launch
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.lifecycle.repeatOnLifecycle
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import androidx.navigation.navArgument
 import com.example.antitheftdemo.detection.DetectionRepository
-import com.example.antitheftdemo.detection.DetectionScreen
-import com.example.antitheftdemo.detection.DetectionViewModel
 import com.example.antitheftdemo.pincode.PinCodeScreen
 import com.example.antitheftdemo.pincode.PinCodeViewModel
-import com.example.antitheftdemo.home.HomeItemType
 import com.example.antitheftdemo.home.HomeScreen
 
 @Composable
@@ -73,46 +63,40 @@ fun AppNavigation(notificationSession: String? = null, onNotificationConsumed: (
     val currentEntry by navController.currentBackStackEntryAsState()
     LaunchedEffect(notificationSession, currentEntry) {
         val route = currentEntry?.destination?.route
-        if (notificationSession != null && route in listOf("home", "detection/{type}", "pin_verification/{session}", "settings", "settings_pin", "settings_language", "settings_permission")) {
-            val snapshot = DetectionRepository.state.value
-            if (snapshot.session == notificationSession && snapshot.type != null && !snapshot.starting) {
-                navController.navigate("detection/${snapshot.type.name}") {
-                    popUpTo("home") { inclusive = false }; launchSingleTop = true
-                }
-                navController.navigate("pin_verification/$notificationSession") { launchSingleTop = true }
-            }
+        if (notificationSession != null && route in AppRoutes.notificationDestinations) {
+            navController.openNotificationProtection(notificationSession)
             onNotificationConsumed()
         }
     }
-    NavHost(navController = navController, startDestination = "splash") {
-        composable("splash") {
+    NavHost(navController = navController, startDestination = AppRoutes.SPLASH) {
+        composable(AppRoutes.SPLASH) {
             SplashContent {
                 next(when {
-                    preferences.onboardingComplete && pinStore.hasPin -> "home"
-                    preferences.language == null -> "language"
-                    !preferences.introComplete -> "intro"
-                    !preferences.permissionsReviewed -> "permission"
-                    !pinStore.hasPin -> "pin_setup"
-                    else -> "finish_setup"
+                    preferences.onboardingComplete && pinStore.hasPin -> AppRoutes.HOME
+                    preferences.language == null -> AppRoutes.LANGUAGE
+                    !preferences.introComplete -> AppRoutes.INTRO
+                    !preferences.permissionsReviewed -> AppRoutes.PERMISSION
+                    !pinStore.hasPin -> AppRoutes.PIN_SETUP
+                    else -> AppRoutes.FINISH_SETUP
                 })
             }
         }
-        composable("language") {
+        composable(AppRoutes.LANGUAGE) {
             LanguageScreen(initialLanguage = com.example.antitheftdemo.language.AppLocale.current(context) ?: preferences.language) { item ->
-                saveAndNext("intro") { preferences.saveLanguage(item.code); com.example.antitheftdemo.language.AppLocale.apply(item.code) }
+                saveAndNext(AppRoutes.INTRO) { preferences.saveLanguage(item.code); com.example.antitheftdemo.language.AppLocale.apply(item.code) }
             }
         }
-        composable("intro") {
-            IntroScreen { saveAndNext("permission") { preferences.finishIntro() } }
+        composable(AppRoutes.INTRO) {
+            IntroScreen { saveAndNext(AppRoutes.PERMISSION) { preferences.finishIntro() } }
         }
-        composable("permission") {
+        composable(AppRoutes.PERMISSION) {
             PermissionScreen {
-                saveAndNext(if (pinStore.hasPin) "finish_setup" else "pin_setup") {
+                saveAndNext(if (pinStore.hasPin) AppRoutes.FINISH_SETUP else AppRoutes.PIN_SETUP) {
                     preferences.finishPermissions()
                 }
             }
         }
-        composable("settings") {
+        composable(AppRoutes.SETTINGS) {
             val model: SettingsViewModel = viewModel()
             val monitoring by DetectionRepository.state.collectAsStateWithLifecycle()
             val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -125,17 +109,17 @@ fun AppNavigation(notificationSession: String? = null, onNotificationConsumed: (
             SettingsScreen(model, context.packageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA_FLASH),
                 previewAllowed = monitoring.session == null,
                 onBack = { navController.popBackStack() },
-                onPin = { navController.navigate("settings_pin") { launchSingleTop = true } },
-                onLanguage = { navController.navigate("settings_language") { launchSingleTop = true } },
+                onPin = { navController.navigate(AppRoutes.SETTINGS_PIN) { launchSingleTop = true } },
+                onLanguage = { navController.navigate(AppRoutes.SETTINGS_LANGUAGE) { launchSingleTop = true } },
                 onPreview = { AlarmPreview.play(context, it, model::previewError) },
                 onStopPreview = AlarmPreview::stop)
         }
-        composable("settings_pin") {
+        composable(AppRoutes.SETTINGS_PIN) {
             val model: PinCodeViewModel = viewModel()
             LaunchedEffect(Unit) { model.configureSettings() }
             PinCodeScreen(model) { navController.popBackStack() }
         }
-        composable("settings_language") {
+        composable(AppRoutes.SETTINGS_LANGUAGE) {
             LanguageScreen(initialLanguage = com.example.antitheftdemo.language.AppLocale.current(context) ?: preferences.language) { item ->
                 scope.launch {
                     try { preferences.saveLanguage(item.code); navController.popBackStack(); com.example.antitheftdemo.language.AppLocale.apply(item.code) }
@@ -143,124 +127,35 @@ fun AppNavigation(notificationSession: String? = null, onNotificationConsumed: (
                 }
             }
         }
-        composable("settings_permission") {
+        composable(AppRoutes.SETTINGS_PERMISSION) {
             PermissionScreen { navController.popBackStack() }
         }
-        composable("pin_setup") {
-            LaunchedEffect(Unit) { if (pinStore.hasPin) next("finish_setup") }
+        composable(AppRoutes.PIN_SETUP) {
+            LaunchedEffect(Unit) { if (pinStore.hasPin) next(AppRoutes.FINISH_SETUP) }
             val model: PinCodeViewModel = viewModel()
             PinCodeScreen(model) {
-                saveAndNext("home") { preferences.finishOnboarding() }
+                saveAndNext(AppRoutes.HOME) { preferences.finishOnboarding() }
             }
         }
-        composable("finish_setup") {
-            LaunchedEffect(Unit) { saveAndNext("home") { preferences.finishOnboarding() } }
+        composable(AppRoutes.FINISH_SETUP) {
+            LaunchedEffect(Unit) { saveAndNext(AppRoutes.HOME) { preferences.finishOnboarding() } }
         }
 
 
-        composable("home") {
+        composable(AppRoutes.HOME) {
             HomeScreen(
-                onSettingsClick = { navController.navigate("settings") { launchSingleTop = true } },
-                onNotificationPermissionClick = { navController.navigate("settings_permission") { launchSingleTop = true } },
+                onSettingsClick = { navController.navigate(AppRoutes.SETTINGS) { launchSingleTop = true } },
+                onNotificationPermissionClick = { navController.navigate(AppRoutes.SETTINGS_PERMISSION) { launchSingleTop = true } },
                 onNavigation = { selectedItem ->
-                    val type = selectedItem.type?.name ?: "UNKNOWN"
-                    navController.navigate("detection/$type") { launchSingleTop = true }
-                }
-            )
-        }
-
-        composable(
-            route = "detection/{type}",
-            arguments = listOf(
-                navArgument("type") { type = NavType.StringType }
-            )
-        ) { backStackEntry ->
-            val typeStr = backStackEntry.arguments?.getString("type") ?: ""
-            val itemType = runCatching { HomeItemType.valueOf(typeStr) }.getOrElse { HomeItemType.WIFI_DETECTION }
-
-            val title = when (itemType) {
-                HomeItemType.WIFI_DETECTION -> "@string/wifi"
-                HomeItemType.PROXIMITY_DETECTION -> "@string/proximity"
-                HomeItemType.MOTION_DETECTION -> "@string/motion"
-                HomeItemType.CHARGER_DETECTION -> "@string/charger"
-                HomeItemType.HANDSFREE_DETECTION -> "@string/handsfree"
-                HomeItemType.BATTERY_FULL_DETECTION -> "@string/battery_full"
-            }
-
-            val viewModel: DetectionViewModel = viewModel()
-
-            val savedStateHandle = backStackEntry.savedStateHandle
-            val lifecycle = LocalLifecycleOwner.current.lifecycle
-            LaunchedEffect(backStackEntry, lifecycle) {
-                lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                    savedStateHandle.getStateFlow("pin_verified", "").collect { proof ->
-                        if (proof.isNotEmpty()) {
-                            savedStateHandle["pin_verified"] = ""
-                            viewModel.acceptProof(proof)
-                        }
-                    }
-                }
-            }
-
-            val authorizedSession = viewModel.authorizedSession
-            val monitoring by viewModel.state.collectAsStateWithLifecycle()
-            fun leaveStop() { viewModel.revokeStop() }
-            BackHandler(authorizedSession != null) { leaveStop() }
-            DisposableEffect(lifecycle) {
-                val observer = LifecycleEventObserver { _, event ->
-                    if (event == Lifecycle.Event.ON_STOP) viewModel.revokeStop()
-                }
-                lifecycle.addObserver(observer)
-                onDispose { lifecycle.removeObserver(observer); viewModel.revokeStop() }
-            }
-            LaunchedEffect(authorizedSession) {
-                if (authorizedSession != null) { delay(60_000); viewModel.revokeStop() }
-            }
-            LaunchedEffect(monitoring.session, authorizedSession) {
-                if (authorizedSession != null && monitoring.session != authorizedSession) {
-                    viewModel.revokeStop()
-                    navController.popBackStack("home", false)
-                }
-            }
-            DetectionScreen(
-                title = title,
-                itemType = itemType,
-                viewModel = viewModel,
-                onBackClick = { if (authorizedSession != null) leaveStop() else navController.popBackStack() },
-                authorizedSession = authorizedSession,
-                stopCompleted = viewModel.stopCompleted,
-                onDeactivate = {
-                    DetectionRepository.state.value.session?.let { session ->
-                        navController.navigate("pin_verification/$session") { launchSingleTop = true }
-                    }
-                },
-                onConfirmStop = {
-                    if (viewModel.confirmStop()) navController.popBackStack("home", false)
-                    else DetectionRepository.state.value.session?.let { session ->
-                        navController.navigate("pin_verification/$session") { launchSingleTop = true }
+                    selectedItem.type?.let { type ->
+                        navController.navigate(AppRoutes.detection(type)) { launchSingleTop = true }
                     }
                 }
             )
         }
 
-        composable("pin_verification/{session}") { entry ->
-            val session = entry.arguments?.getString("session") ?: ""
-            val pinViewModel: PinCodeViewModel = viewModel()
+        protectionRoutes(navController)
 
-            LaunchedEffect(Unit) {
-                pinViewModel.setVerifyMode()
-            }
-
-            PinCodeScreen(
-                viewModel = pinViewModel,
-                onPinCreated = {
-                    DetectionRepository.controller.issueProof(session)?.let { proof ->
-                        navController.previousBackStackEntry?.savedStateHandle?.set("pin_verified", proof)
-                    }
-                    navController.popBackStack()
-                }
-            )
-        }
     }
     setupError?.let { message ->
         AlertDialog(onDismissRequest = { setupError = null }, title = { Text(stringResource(R.string.cannot_save)) },

@@ -16,17 +16,8 @@ class FlashController(context: Context, private val onWarning: (String) -> Unit)
     private var baselinePending = false
     private var ownsTorch = false
     private var on = false
-    private val callback = object : CameraManager.TorchCallback() {
-        override fun onTorchModeUnavailable(cameraId: String) {
-            if (cameraId == id) unavailable("@string/flash_busy")
-        }
-        override fun onTorchModeChanged(cameraId: String, enabled: Boolean) {
-            if (cameraId != id || !baselinePending) return
-            baselinePending = false
-            if (enabled) unavailable("@string/flash_owned")
-            else handler.post(blink)
-        }
-    }
+    private var callback: CameraManager.TorchCallback? = null
+    private var generation = 0
     private val blink = object : Runnable {
         override fun run() {
             val camera = id ?: return
@@ -50,17 +41,31 @@ class FlashController(context: Context, private val onWarning: (String) -> Unit)
             Log.i("AntiTheftEffects", "Alarm torch requested")
             baselinePending = true
             registered = true
-            manager.registerTorchCallback(callback, handler)
+            val current = ++generation
+            val listener = object : CameraManager.TorchCallback() {
+                override fun onTorchModeUnavailable(cameraId: String) {
+                    if (current == generation && cameraId == id) unavailable("@string/flash_busy")
+                }
+                override fun onTorchModeChanged(cameraId: String, enabled: Boolean) {
+                    if (current != generation || cameraId != id || !baselinePending) return
+                    baselinePending = false
+                    if (enabled) unavailable("@string/flash_owned") else handler.post(blink)
+                }
+            }
+            callback = listener
+            manager.registerTorchCallback(listener, handler)
             // A missing baseline must not leave a registered callback indefinitely.
             handler.postDelayed({ if (baselinePending) unavailable("@string/flash_unavailable") }, 3000)
         } catch (_: Exception) { unavailable("@string/flash_unavailable") }
     }
     private fun unavailable(message: String) { Log.w("AntiTheftEffects", message); stop(); onWarning(message) }
     fun stop() {
+        generation++
         if (registered) Log.i("AntiTheftEffects", "Alarm torch released")
         handler.removeCallbacksAndMessages(null)
         if (ownsTorch) id?.let { runCatching { manager.setTorchMode(it, false) } }
-        if (registered) runCatching { manager.unregisterTorchCallback(callback) }
+        if (registered) callback?.let { runCatching { manager.unregisterTorchCallback(it) } }
+        callback = null
         id = null
         registered = false
         baselinePending = false

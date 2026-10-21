@@ -7,19 +7,28 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.antitheftdemo.security.PinStore
+import com.example.antitheftdemo.security.PinAccess
 import com.example.antitheftdemo.security.PinResult
 import com.example.antitheftdemo.security.PinPolicy
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
-class PinCodeViewModel(application: Application) : AndroidViewModel(application) {
-    private val store = PinStore(application)
+class PinCodeViewModel internal constructor(application: Application, private val store: PinAccess) : AndroidViewModel(application) {
+    constructor(application: Application) : this(application, PinStore(application))
+    private var verificationGeneration = 0
     var isCreateMode by mutableStateOf(true)
         private set
     var isVerifyMode by mutableStateOf(false)
         private set
     private var firstPin = ""
     private var completed = false
+    var completionPending by mutableStateOf(false)
+        private set
+    fun consumeCompletion(): Boolean {
+        if (!completionPending) return false
+        completionPending = false
+        return true
+    }
     private var settingsMode = false
     private var changeProof: String? = null
     var currentPin by mutableStateOf("")
@@ -49,7 +58,17 @@ class PinCodeViewModel(application: Application) : AndroidViewModel(application)
         settingsMode = true
         if (store.hasPin) setVerifyMode()
     }
+    /** A verification result belongs only to the visible PIN attempt, including across recreation. */
+    fun invalidateVerification() {
+        verificationGeneration++
+        if (isVerifyMode) {
+            currentPin = ""
+            completed = false
+            completionPending = false
+        }
+    }
     override fun onCleared() {
+        invalidateVerification()
         changeProof?.let(store::revokeChange)
         firstPin = ""
         currentPin = ""
@@ -60,9 +79,8 @@ class PinCodeViewModel(application: Application) : AndroidViewModel(application)
             error = null
         }
     }
-    fun handleAction(onSuccess: () -> Unit) {
-        if (busy) return
-        if (completed) { onSuccess(); return }
+    fun handleAction() {
+        if (busy || completed) return
         if (currentPin.length != 4) { error = "@string/pin_digits"; return }
         if (!isVerifyMode && isCreateMode) {
             firstPin = currentPin
@@ -76,10 +94,17 @@ class PinCodeViewModel(application: Application) : AndroidViewModel(application)
             return
         }
         busy = true
+        val generation = verificationGeneration
+        val verifying = isVerifyMode
+        val submittedPin = currentPin
         viewModelScope.launch {
             try {
                 val result = if (isVerifyMode && settingsMode) {
-                    val authorization = store.authorizeChange(currentPin)
+                    val authorization = store.authorizeChange(submittedPin)
+                    if (generation != verificationGeneration) {
+                        authorization.proof?.let(store::revokeChange)
+                        return@launch
+                    }
                     if (authorization.result == PinResult.Verified) {
                         changeProof = authorization.proof
                         currentPin = ""
@@ -89,17 +114,18 @@ class PinCodeViewModel(application: Application) : AndroidViewModel(application)
                         return@launch
                     }
                     authorization.result
-                } else if (isVerifyMode) store.verify(currentPin) else {
+                } else if (isVerifyMode) store.verify(submittedPin) else {
                     val proof = changeProof
-                    if (proof != null) store.replace(currentPin, proof) else store.create(currentPin)
+                    if (proof != null) store.replace(submittedPin, proof) else store.create(submittedPin)
                     changeProof = null
                     PinResult.Verified
                 }
+                if (verifying && generation != verificationGeneration) return@launch
                 if (result == PinResult.Verified) {
                     completed = true
                     firstPin = ""
                     currentPin = ""
-                    onSuccess()
+                    completionPending = true
                 } else {
                     currentPin = ""
                     error = when (result) {
@@ -109,6 +135,7 @@ class PinCodeViewModel(application: Application) : AndroidViewModel(application)
                 }
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (_: Exception) {
+                if (verifying && generation != verificationGeneration) return@launch
                 if (settingsMode && changeProof != null) {
                     changeProof?.let(store::revokeChange)
                     changeProof = null

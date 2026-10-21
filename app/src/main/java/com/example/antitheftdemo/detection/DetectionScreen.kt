@@ -20,6 +20,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -41,6 +42,23 @@ fun DetectionScreen(
     onConfirmStop: () -> Unit // Chuyển sang màn PIN khi bấm Deactivate
 ) {
     val snapshot by viewModel.state.collectAsStateWithLifecycle()
+    DetectionContent(title, itemType, snapshot, onBackClick, authorizedSession, stopCompleted,
+        onDeactivate, onConfirmStop, onActivate = { viewModel.onCircleClick(itemType) })
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun DetectionContent(
+    title: String,
+    itemType: HomeItemType,
+    snapshot: DetectionSnapshot,
+    onBackClick: () -> Unit,
+    authorizedSession: String? = null,
+    stopCompleted: Boolean = false,
+    onDeactivate: () -> Unit,
+    onConfirmStop: () -> Unit,
+    onActivate: () -> Unit
+) {
     val currentState = snapshot.states.getValue(itemType)
     val presentation = detectionPresentation(snapshot, itemType, authorizedSession, stopCompleted)
     val confirming = presentation == DetectionPresentation.AUTHORIZED_STOP
@@ -80,13 +98,16 @@ fun DetectionScreen(
                         DetectionPresentation.SECURED -> "@string/secured"
                         DetectionPresentation.AUTHORIZED_STOP -> "@string/stop_protection"
                     }),
-                    modifier = Modifier.fillMaxSize().clickable(
+                    modifier = Modifier.fillMaxSize().testTag("detection_circle").clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null
                     ) {
                         if (stopCompleted) return@clickable
-                        if (confirming) onConfirmStop()
-                        else if (!snapshot.starting) viewModel.onCircleClick(itemType)
+                        when (presentation) {
+                            DetectionPresentation.AUTHORIZED_STOP -> onConfirmStop()
+                            DetectionPresentation.SECURED -> onDeactivate()
+                            DetectionPresentation.ACTIVE -> if (!snapshot.starting) onActivate()
+                        }
                     }
                 )
                 // Source PNGs include English lettering. Keep their rings; replace only the

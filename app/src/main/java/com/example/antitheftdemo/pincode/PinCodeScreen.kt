@@ -17,7 +17,15 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.view.WindowManager
 import androidx.compose.runtime.DisposableEffect
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.snapshotFlow
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -41,6 +49,25 @@ fun PinCodeScreen(
     onPinCreated: () -> Unit = {}
 ) {
     val context = LocalContext.current
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val currentSuccess = rememberUpdatedState(onPinCreated)
+    LaunchedEffect(lifecycle, viewModel) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            snapshotFlow { viewModel.completionPending }.collect { pending ->
+                if (pending && viewModel.consumeCompletion()) currentSuccess.value()
+            }
+        }
+    }
+    DisposableEffect(lifecycle, viewModel) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) viewModel.invalidateVerification()
+        }
+        lifecycle.addObserver(observer)
+        onDispose {
+            lifecycle.removeObserver(observer)
+            viewModel.invalidateVerification()
+        }
+    }
     DisposableEffect(context) {
         val window = context.pinActivity()?.window
         val hadSecureFlag = window?.attributes?.flags?.and(WindowManager.LayoutParams.FLAG_SECURE) != 0
@@ -106,6 +133,7 @@ fun PinCodeScreen(
                     onValueChange = { viewModel.onPinChange(it) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
                     modifier = Modifier
+                        .testTag("pin_input")
                         .focusRequester(focusRequester)
                         .size(1.dp)
                 )
@@ -120,7 +148,7 @@ fun PinCodeScreen(
             Button(
                 enabled = !viewModel.busy,
                 onClick = {
-                    viewModel.handleAction(onPinCreated)
+                    viewModel.handleAction()
                     keyboardController?.hide()
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = Color.White),

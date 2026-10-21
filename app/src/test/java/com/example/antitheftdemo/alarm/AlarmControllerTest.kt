@@ -6,6 +6,29 @@ import com.example.antitheftdemo.settings.AlarmSettings
 import com.example.antitheftdemo.settings.AlarmTone
 
 class AlarmControllerTest {
+    @Test fun callbacksFromStoppedPlaybackCannotAffectRearmedSession() {
+        val states = mutableListOf<(AlarmStatus) -> Unit>()
+        val failures = mutableListOf<(String) -> Unit>()
+        val alarm = AlarmController(object : AlarmPlayback {
+            override fun start(onState: (AlarmStatus) -> Unit, onFailure: (String) -> Unit) {
+                states += onState
+                failures += onFailure
+            }
+            override fun stop() {}
+        })
+        val observed = mutableListOf<AlarmStatus>()
+        var failed = false
+        alarm.trigger("old", true, observed::add) { failed = true }
+        alarm.stop()
+        alarm.stop()
+        alarm.trigger("new", true, observed::add) { failed = true }
+        states[0](AlarmStatus.PLAYING)
+        failures[0]("late failure")
+        assertTrue(observed.isEmpty())
+        assertFalse(failed)
+        states[1](AlarmStatus.SUSPENDED)
+        assertEquals(listOf(AlarmStatus.SUSPENDED), observed)
+    }
     private class FakePlayback : AlarmPlayback {
         var starts = 0
         var playing = false

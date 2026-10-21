@@ -8,7 +8,7 @@ data class LanguageItem(
     val code: String = requireNotNull(LanguageCodes.code(title))
 )
 
-var listItem = listOf(
+val listItem = listOf(
     LanguageItem(
         title = "English",
         icon = R.drawable.english

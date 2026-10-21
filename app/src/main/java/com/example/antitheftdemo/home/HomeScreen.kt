@@ -27,19 +27,20 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.antitheftdemo.detection.DetectionRepository
+import com.example.antitheftdemo.detection.DetectionState
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -105,7 +106,8 @@ fun HomeScreen(
                 TextButton(onClick = onNotificationPermissionClick) { Text(stringResource(R.string.review_notifications)) }
             }
             HomeContent(
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
+                securedType = snapshot.type?.takeIf { snapshot.states[it] == DetectionState.SECURED }
             ) { selectedItem ->
                 onNavigation(selectedItem)
             }
@@ -115,12 +117,7 @@ fun HomeScreen(
 
 // --- 2. LƯỚI DANH SÁCH (Xử lý logic chọn Item) ---
 @Composable
-fun HomeContent(modifier: Modifier = Modifier, onClick: (HomeItem) -> Unit = {}) {
-    // FIX LỖI: Đổi tên biến state thành 'itemsState' để không bị trùng với 'listItem' toàn cục
-    var itemsState by remember {
-        mutableStateOf(listItem) // 'listItem' là biến toàn cục chứa danh sách của bạn
-    }
-
+fun HomeContent(modifier: Modifier = Modifier, securedType: HomeItemType? = null, onClick: (HomeItem) -> Unit = {}) {
     LazyVerticalGrid(
         columns = GridCells.Fixed(2),
         modifier = modifier
@@ -129,20 +126,10 @@ fun HomeContent(modifier: Modifier = Modifier, onClick: (HomeItem) -> Unit = {})
         verticalArrangement = Arrangement.spacedBy(16.dp),
         horizontalArrangement = Arrangement.spacedBy(16.dp) // Để 16.dp cho 2 cột cân đối
     ) {
-        items(itemsState) { item ->
+        items(listItem, key = { requireNotNull(it.type).name }) { item ->
             ItemContent(
-                homeItem = item,
-                onClick = { itemSelected ->
-                    // Logic update list khi click
-                    itemsState = itemsState.map { currentItem ->
-                        if (currentItem == itemSelected) {
-                            onClick(currentItem) // Trả sự kiện ra HomeScreen
-                            currentItem.copyWithSelection(true)
-                        } else {
-                            currentItem.copyWithSelection(false)
-                        }
-                    }
-                }
+                homeItem = item.copy(isSelected = item.type == securedType),
+                onClick = onClick
             )
         }
     }
@@ -152,6 +139,8 @@ fun HomeContent(modifier: Modifier = Modifier, onClick: (HomeItem) -> Unit = {})
 fun ItemContent(homeItem: HomeItem, onClick: (HomeItem) -> Unit) {
     Box(
         modifier = Modifier
+            .testTag("home_${homeItem.type}")
+            .semantics { selected = homeItem.isSelected }
             .fillMaxWidth()
             .height(220.dp) // Chỉnh lại chiều cao cho cân đối với ảnh
             .shadow(

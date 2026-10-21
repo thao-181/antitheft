@@ -8,14 +8,9 @@ data class HomeItem(
     val description: String,
     val icon: Int,
     val isSelected: Boolean = false
-) {
-    fun copyWithSelection(isSelected: Boolean): HomeItem {
-        return this.copy(isSelected = isSelected)
-    }
+)
 
-}
-
-var listItem = listOf(
+val listItem = listOf(
     HomeItem(
         type = HomeItemType.PROXIMITY_DETECTION,
         title = "@string/proximity",
@@ -54,11 +49,11 @@ var listItem = listOf(
     )
 )
 
-enum class HomeItemType {
-    PROXIMITY_DETECTION,
-    MOTION_DETECTION,
-    CHARGER_DETECTION,
-    HANDSFREE_DETECTION,
-    WIFI_DETECTION,
-    BATTERY_FULL_DETECTION
+enum class HomeItemType(val titleReference: String) {
+    PROXIMITY_DETECTION("@string/proximity"),
+    MOTION_DETECTION("@string/motion"),
+    CHARGER_DETECTION("@string/charger"),
+    HANDSFREE_DETECTION("@string/handsfree"),
+    WIFI_DETECTION("@string/wifi"),
+    BATTERY_FULL_DETECTION("@string/battery_full")
 }

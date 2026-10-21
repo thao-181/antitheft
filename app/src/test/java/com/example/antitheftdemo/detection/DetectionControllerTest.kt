@@ -5,6 +5,27 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class DetectionControllerTest {
+    @Test fun unusedGrantAndLateCallbacksCannotAffectReplacementOrRecreatedProcess() {
+        val c = DetectionController()
+        val old = c.request(MOTION_DETECTION)!!
+        assertNull(c.issueProof(old))
+        c.started(old)
+        val unused = c.issueProof(old)!!
+        c.ended(old)
+        val next = c.request(WIFI_DETECTION)!!
+        c.started(next)
+        c.started(old)
+        c.alarm(old)
+        c.ended(old)
+        assertNull(c.consumeProof(unused))
+        assertEquals(next, c.state.value.session)
+        assertFalse(c.state.value.alarming)
+        val current = c.issueProof(next)!!
+        val recreatedProcess = DetectionController()
+        assertFalse(recreatedProcess.validProof(current))
+        assertNull(recreatedProcess.state.value.session)
+        assertTrue(recreatedProcess.state.value.states.values.all { it == DetectionState.ACTIVE })
+    }
     @Test fun stopAuthorizationExpiresRevokesAndDoesNotDisarmUntilConsumed() {
         var clock = 100L
         val c = DetectionController { clock }

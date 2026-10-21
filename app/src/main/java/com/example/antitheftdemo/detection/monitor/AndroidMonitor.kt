@@ -126,8 +126,8 @@ class AndroidMonitor(context: Context) : MonitorBackend {
                 if (disconnected.id == sensor.id) failure("@string/sensor_disconnected")
             }
         }
-        manager.registerDynamicSensorCallback(callback, handler)
         cleanup += { manager.unregisterDynamicSensorCallback(callback) }
+        manager.registerDynamicSensorCallback(callback, handler)
     }
     private fun headphones(alarm: () -> Unit) {
         val audio = context.getSystemService(AudioManager::class.java)
@@ -150,6 +150,7 @@ class AndroidMonitor(context: Context) : MonitorBackend {
             }
         }
         fun changed() {
+            if (generation != expectedGeneration) return
             handler.removeCallbacks(recheck)
             handler.postDelayed(recheck, 750)
         }
@@ -157,8 +158,8 @@ class AndroidMonitor(context: Context) : MonitorBackend {
             override fun onAudioDevicesRemoved(devices: Array<out AudioDeviceInfo>) = changed()
             override fun onAudioDevicesAdded(devices: Array<out AudioDeviceInfo>) = changed()
         }
-        audio.registerAudioDeviceCallback(callback, handler)
         cleanup += { audio.unregisterAudioDeviceCallback(callback) }
+        audio.registerAudioDeviceCallback(callback, handler)
         changed()
     }
 
@@ -198,9 +199,9 @@ class AndroidMonitor(context: Context) : MonitorBackend {
                 }
             }
         }
+        cleanup += { connectivity.unregisterNetworkCallback(callback) }
         connectivity.registerNetworkCallback(NetworkRequest.Builder()
             .addTransportType(NetworkCapabilities.TRANSPORT_WIFI).build(), callback)
-        cleanup += { connectivity.unregisterNetworkCallback(callback) }
         post { if (!manager.isWifiEnabled && rule.adapter(false)) alarm() }
     }
 }

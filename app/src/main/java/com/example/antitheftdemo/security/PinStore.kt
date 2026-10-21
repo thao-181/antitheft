@@ -16,29 +16,38 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
+internal interface PinAccess {
+    val hasPin: Boolean
+    suspend fun create(pin: String)
+    suspend fun verify(pin: String): PinResult
+    suspend fun authorizeChange(pin: String): PinChangeCheck
+    suspend fun replace(pin: String, proof: String)
+    fun revokeChange(proof: String)
+}
+
 /** The salted verifier is encrypted by a non-exportable Android Keystore key. */
-class PinStore(context: Context) {
+class PinStore(context: Context) : PinAccess {
     private val prefs = context.applicationContext.getSharedPreferences("pin_security", Context.MODE_PRIVATE)
-    val hasPin: Boolean get() = prefs.contains("verifier")
-    suspend fun create(pin: String) = withContext(Dispatchers.IO) { mutex.withLock {
+    override val hasPin: Boolean get() = prefs.contains("verifier")
+    override suspend fun create(pin: String) = withContext(Dispatchers.IO) { mutex.withLock {
         require(PinPolicy.valid(pin))
         check(!hasPin) { "PIN already exists" }
         savePin(pin, createKey = true)
     } }
-    suspend fun verify(pin: String): PinResult = withContext(Dispatchers.IO) { mutex.withLock { verifyLocked(pin) } }
-    suspend fun authorizeChange(pin: String): PinChangeCheck = withContext(Dispatchers.IO) { mutex.withLock {
+    override suspend fun verify(pin: String): PinResult = withContext(Dispatchers.IO) { mutex.withLock { verifyLocked(pin) } }
+    override suspend fun authorizeChange(pin: String): PinChangeCheck = withContext(Dispatchers.IO) { mutex.withLock {
         val result = verifyLocked(pin)
         val proof = if (result == PinResult.Verified)
             changes.issue(checkNotNull(prefs.getString("verifier", null)), SystemClock.elapsedRealtime()) else null
         PinChangeCheck(result, proof)
     } }
-    suspend fun replace(pin: String, proof: String) = withContext(Dispatchers.IO) { mutex.withLock {
+    override suspend fun replace(pin: String, proof: String) = withContext(Dispatchers.IO) { mutex.withLock {
         require(PinPolicy.valid(pin))
         val verifier = prefs.getString("verifier", null) ?: error("PIN is missing")
         check(changes.consume(proof, verifier, SystemClock.elapsedRealtime())) { "Verify current PIN again" }
         savePin(pin, createKey = false)
     } }
-    fun revokeChange(proof: String) = changes.revoke(proof)
+    override fun revokeChange(proof: String) = changes.revoke(proof)
     private fun savePin(pin: String, createKey: Boolean) {
         val salt = ByteArray(32).also { SecureRandom().nextBytes(it) }
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")

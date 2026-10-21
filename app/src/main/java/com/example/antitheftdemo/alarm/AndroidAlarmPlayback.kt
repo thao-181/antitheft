@@ -9,7 +9,9 @@ import android.media.MediaPlayer
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import com.example.antitheftdemo.settings.AlarmSettings
+import com.example.antitheftdemo.util.releaseResources
 
 /** A single looping resource on the alarm stream. Never writes volume or DND policy. */
 class AndroidAlarmPlayback(context: Context, initial: AlarmSettings = AlarmSettings(), private val loop: Boolean = true) : AlarmPlayback {
@@ -124,27 +126,31 @@ class AndroidAlarmPlayback(context: Context, initial: AlarmSettings = AlarmSetti
     private fun releasePlayer() {
         val media = player
         player = null
-        media?.setOnPreparedListener(null)
-        media?.setOnErrorListener(null)
-        media?.setOnCompletionListener(null)
+        // Listener identity checks also reject already-queued callbacks after this reference is cleared.
         media?.release()
     }
     override fun stop() {
         active = false
         generation++
         handler.removeCallbacksAndMessages(null)
-        releasePlayer()
         prepared = false
         focused = false
-        if (Build.VERSION.SDK_INT >= 26) focusRequest?.let { audio.abandonAudioFocusRequest(it) }
-        else {
-            @Suppress("DEPRECATION")
-            focusListener?.let { audio.abandonAudioFocus(it) }
-        }
+        val oldRequest = focusRequest
+        val oldListener = focusListener
         focusRequest = null
         focusListener = null
         stateCallback = {}
         failureCallback = {}
         lastStatus = null
+        releaseResources({ resource, error -> Log.w("AntiTheftAudio", "Could not release $resource", error) },
+            "player" to { releasePlayer() },
+            "audio focus" to {
+                if (Build.VERSION.SDK_INT >= 26) oldRequest?.let { audio.abandonAudioFocusRequest(it) }
+                else {
+                    @Suppress("DEPRECATION")
+                    oldListener?.let { audio.abandonAudioFocus(it) }
+                }
+                Unit
+            })
     }
 }

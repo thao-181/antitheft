@@ -13,14 +13,14 @@ class AlarmEffectsController(private val output: AlarmEffectOutput) {
     fun start(settings: AlarmSettings) { active = true; update(settings) }
     fun update(settings: AlarmSettings) {
         if (!active) return
-        if (settings.vibrate != applied.vibrate) output.vibration(settings.vibrate)
-        if (settings.flash != applied.flash) output.flash(settings.flash)
+        if (settings.vibrate != applied.vibrate) runCatching { output.vibration(settings.vibrate) }
+        if (settings.flash != applied.flash) runCatching { output.flash(settings.flash) }
         applied = settings
     }
     fun stop() {
         active = false
-        output.vibration(false)
-        output.flash(false)
+        runCatching { output.vibration(false) }
+        runCatching { output.flash(false) }
         applied = AlarmSettings(vibrate = false)
     }
 }

@@ -21,6 +21,11 @@ object DetectionRepository {
     val state = controller.state
     private val handler = Handler(Looper.getMainLooper())
     private var stopRuntime: ((String?) -> Unit)? = null
+    private var startupTimeout: Runnable? = null
+    private fun cancelStartupTimeout() {
+        startupTimeout?.let(handler::removeCallbacks)
+        startupTimeout = null
+    }
     private var initialized = false
     fun initialize(context: Context) {
         if (initialized) return
@@ -43,38 +48,44 @@ object DetectionRepository {
         try {
             ContextCompat.startForegroundService(context, Intent(context, MonitoringService::class.java)
                 .putExtra("session", session).putExtra("type", type.name))
-            handler.postDelayed({
+            val timeout = Runnable {
                 if (state.value.session == session && state.value.starting)
                     failed(session, "@string/service_start_error")
-            }, 10_000)
+            }
+            startupTimeout = timeout
+            handler.postDelayed(timeout, 10_000)
         } catch (_: Exception) { failed(session, "@string/service_not_allowed") }
     }
-    fun attach(session: String, stop: (String?) -> Unit): Boolean {
-        if (state.value.session != session || !state.value.starting) return false
+    fun attach(session: String, type: HomeItemType, stop: (String?) -> Unit): Boolean {
+        if (state.value.session != session || state.value.type != type || !state.value.starting || stopRuntime != null) return false
         stopRuntime = stop
         return true
     }
     fun started(context: Context, session: String) {
-        if (state.value.session != session) return
+        if (state.value.session != session || !state.value.starting || stopRuntime == null) return
+        cancelStartupTimeout()
         context.getSharedPreferences("monitor_runtime", Context.MODE_PRIVATE).edit()
             .putString("active_type", state.value.type?.name).apply()
         controller.started(session)
     }
     fun stopVerified(proof: String): Boolean {
-        val session = controller.consumeProof(proof) ?: return false
         val stop = stopRuntime ?: return false
+        val session = controller.consumeProof(proof) ?: return false
         stop(null)
         return state.value.session != session
     }
     fun failed(session: String, message: String) {
         if (state.value.session != session) return
+        cancelStartupTimeout()
         val stop = stopRuntime
         if (stop != null) stop(message) else controller.ended(session, message)
     }
     fun ended(context: Context, session: String, message: String?) {
         if (state.value.session != session) return
+        cancelStartupTimeout()
         stopRuntime = null
-        context.getSharedPreferences("monitor_runtime", Context.MODE_PRIVATE).edit().remove("active_type").apply()
-        controller.ended(session, message)
+        try {
+            context.getSharedPreferences("monitor_runtime", Context.MODE_PRIVATE).edit().remove("active_type").apply()
+        } finally { controller.ended(session, message) }
     }
 }

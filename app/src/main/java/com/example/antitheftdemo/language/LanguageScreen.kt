@@ -30,8 +30,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -48,7 +48,8 @@ fun LanguageScreen(
     initialLanguage: String? = null,
     onSaveClick: (LanguageItem) -> Unit = {}
 ) {
-    var selectedLanguage by remember { mutableStateOf(listItem.find { it.code == LanguageCodes.code(initialLanguage) }) }
+    var selectedCode by rememberSaveable(initialLanguage) { mutableStateOf(LanguageCodes.code(initialLanguage)) }
+    val selectedLanguage = listItem.find { it.code == selectedCode }
 
     Surface(
         modifier = modifier.fillMaxSize(),
@@ -110,7 +111,7 @@ fun LanguageScreen(
                         item = item,
                         isSelected = isSelected,
                         onClick = {
-                            selectedLanguage = item // Khi user ấn vào thì nó mới hiện màu xanh
+                            selectedCode = item.code
                         }
                     )
                 }

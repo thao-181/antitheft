@@ -11,6 +11,7 @@ import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import com.example.antitheftdemo.MainActivity
@@ -31,6 +32,7 @@ import com.example.antitheftdemo.alarm.AndroidAlarmPlayback
 import com.example.antitheftdemo.detection.DetectionRepository
 import com.example.antitheftdemo.detection.monitor.AndroidMonitor
 import com.example.antitheftdemo.home.HomeItemType
+import com.example.antitheftdemo.util.releaseResources
 
 class MonitoringService : Service() {
     private val localePreferences by lazy { getSharedPreferences("setup", MODE_PRIVATE) }
@@ -56,13 +58,20 @@ class MonitoringService : Service() {
     private var finishing = false
     private var effects: AlarmEffectsController? = null
     private var settings = AlarmSettings()
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private var scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     override fun onBind(intent: Intent?): IBinder? = null
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val id = intent?.getStringExtra("session")
         val type = intent?.getStringExtra("type")?.let { runCatching { HomeItemType.valueOf(it) }.getOrNull() }
+        // A new start may reach this same instance before Android delivers onDestroy after stopSelf.
+        if (finishing) {
+            scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+            finishing = false
+            session = null
+            mode = null
+        }
         if (session != null) return START_NOT_STICKY
-        if (id == null || type == null || !DetectionRepository.attach(id, ::finishMonitoring)) {
+        if (id == null || type == null || !DetectionRepository.attach(id, type, ::finishMonitoring)) {
             stopSelf(); return START_NOT_STICKY
         }
         session = id
@@ -80,7 +89,9 @@ class MonitoringService : Service() {
             val repository = SettingsRepository(this)
             settings = repository.current
             alarm = AlarmController(AndroidAlarmPlayback(this, settings))
-            effects = AlarmEffectsController(AndroidAlarmEffects(this) { DetectionRepository.controller.message(it) })
+            effects = AlarmEffectsController(AndroidAlarmEffects(this) {
+                if (!finishing && session == id) DetectionRepository.controller.message(it)
+            })
             scope.launch {
                 repository.settings.collect { value ->
                     settings = value
@@ -92,8 +103,8 @@ class MonitoringService : Service() {
             }
             monitor = AndroidMonitor(this)
             acquireSensorWakeLock(type)
-            monitor!!.start(type, { trigger(id) }, { finishMonitoring(it) })
-            DetectionRepository.started(this, id)
+            monitor!!.start(type, { trigger(id) }, { if (session == id) finishMonitoring(it) })
+            if (!finishing) DetectionRepository.started(this, id)
         } catch (error: Exception) {
             finishMonitoring(error.message?.takeIf { it.startsWith("@string/") } ?: "@string/service_start_error")
         }
@@ -104,16 +115,23 @@ class MonitoringService : Service() {
         if (type != HomeItemType.MOTION_DETECTION && type != HomeItemType.PROXIMITY_DETECTION) return
         // Non-wakeup sensors need the CPU awake with the screen off. Release on every service exit.
         wakeLock = getSystemService(PowerManager::class.java)
-            .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "AntiTheftDemo:monitor").apply { acquire() }
+            .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "AntiTheftDemo:monitor")
+        wakeLock!!.acquire()
     }
     @SuppressLint("WakelockTimeout") // User-armed alarm; released by finishMonitoring/onDestroy.
     private fun trigger(id: String) {
         val snapshot = DetectionRepository.state.value
         if (finishing || snapshot.session != id || snapshot.starting || snapshot.alarming) return
         AlarmPreview.stop()
-        if (wakeLock?.isHeld != true) {
-            wakeLock = getSystemService(PowerManager::class.java)
-                .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "AntiTheftDemo:alarm").apply { acquire() }
+        try {
+            if (wakeLock?.isHeld != true) {
+                wakeLock = getSystemService(PowerManager::class.java)
+                    .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "AntiTheftDemo:alarm")
+                wakeLock!!.acquire()
+            }
+        } catch (_: Exception) {
+            finishMonitoring("@string/service_stopped")
+            return
         }
         DetectionRepository.controller.alarm(id)
         effects?.start(settings)
@@ -146,7 +164,7 @@ class MonitoringService : Service() {
             putExtra("monitor_session", session)
         }
         val pending = PendingIntent.getActivity(this, 1, open, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-        val name = mode?.let { com.example.antitheftdemo.home.listItem.first { item -> item.type == it }.title } ?: "@string/app_title"
+        val name = mode?.titleReference ?: "@string/app_title"
         return NotificationCompat.Builder(this, CHANNEL)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentTitle(com.example.antitheftdemo.language.AppLocale.text(this, when {
@@ -164,19 +182,25 @@ class MonitoringService : Service() {
     private fun finishMonitoring(message: String?) {
         if (finishing) return
         finishing = true
-        localePreferences.unregisterOnSharedPreferenceChangeListener(localeListener)
-        scope.cancel()
-        monitor?.stop()
+        // Invalidate ownership before releasing: callbacks arriving during cleanup cannot re-arm.
+        val oldMonitor = monitor
+        val oldAlarm = alarm
+        val oldEffects = effects
+        val oldWakeLock = wakeLock
         monitor = null
-        alarm?.stop()
         alarm = null
-        effects?.stop()
         effects = null
-        wakeLock?.let { if (it.isHeld) it.release() }
         wakeLock = null
-        stopForeground(STOP_FOREGROUND_REMOVE)
-        stopSelf()
-        session?.let { DetectionRepository.ended(this, it, message) }
+        releaseResources({ resource, error -> Log.w("AntiTheftService", "Could not release $resource", error) },
+            "locale listener" to { localePreferences.unregisterOnSharedPreferenceChangeListener(localeListener) },
+            "settings collector" to { scope.cancel() },
+            "monitor" to { oldMonitor?.stop(); Unit },
+            "alarm" to { oldAlarm?.stop(); Unit },
+            "effects" to { oldEffects?.stop(); Unit },
+            "wake lock" to { if (oldWakeLock?.isHeld == true) oldWakeLock.release() },
+            "foreground notification" to { stopForeground(STOP_FOREGROUND_REMOVE) },
+            "service" to { stopSelf() },
+            "session" to { session?.let { DetectionRepository.ended(this, it, message) }; Unit })
     }
     override fun onDestroy() {
         finishMonitoring("@string/service_stopped")

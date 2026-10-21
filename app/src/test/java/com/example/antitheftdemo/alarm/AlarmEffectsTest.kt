@@ -5,6 +5,18 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class AlarmEffectsTest {
+    @Test fun unavailableVibratorDoesNotBlockFlashOrItsCleanup() {
+        var flashing = false
+        val effects = AlarmEffectsController(object : AlarmEffectOutput {
+            override fun vibration(enabled: Boolean) { error("Vibrator unavailable") }
+            override fun flash(enabled: Boolean) { flashing = enabled }
+        })
+        effects.start(AlarmSettings(flash = true, vibrate = true))
+        assertTrue(flashing)
+        effects.stop()
+        effects.stop()
+        assertFalse(flashing)
+    }
     private class Output : AlarmEffectOutput {
         var vibrating = false
         var flashing = false

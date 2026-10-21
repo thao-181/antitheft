@@ -11,12 +11,15 @@ class DetectionViewModel(application: Application) : AndroidViewModel(applicatio
         private set
     var stopCompleted by mutableStateOf(false)
         private set
-    fun acceptProof(value: String) {
+    fun acceptProof(value: String, type: HomeItemType): Boolean {
+        val snapshot = state.value
+        if (snapshot.type != type || !DetectionRepository.controller.validProof(value)) return false
+        if (proof == value) return true
         revokeStop()
-        if (DetectionRepository.controller.validProof(value)) {
-            proof = value
-            authorizedSession = DetectionRepository.state.value.session
-        }
+        proof = value
+        authorizedSession = snapshot.session
+        stopCompleted = false
+        return true
     }
     fun revokeStop() {
         proof?.let(DetectionRepository.controller::revokeProof)

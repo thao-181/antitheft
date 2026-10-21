@@ -10,9 +10,9 @@ class BroadCastManager(context: Context) {
     private val receivers = mutableListOf<BroadCastDetection>()
     fun register(filter: IntentFilter, receive: (Intent) -> Unit): Intent? {
         val receiver = BroadCastDetection(receive)
-        val sticky = ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
+        // Take ownership before registration so a partially failed start is still closed by the owner.
         receivers += receiver
-        return sticky
+        return ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
     }
     fun close() {
         receivers.forEach { receiver -> runCatching { context.unregisterReceiver(receiver) } }
