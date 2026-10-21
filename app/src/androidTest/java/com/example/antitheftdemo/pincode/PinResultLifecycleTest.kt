@@ -11,8 +11,9 @@ internal class DeferredPinAccess : PinAccess {
     var result = CompletableDeferred<PinResult>()
     var revoked: String? = null
     var creations = 0
+    var verifications = 0
     override val hasPin = true
-    override suspend fun verify(pin: String) = result.await()
+    override suspend fun verify(pin: String): PinResult { verifications++; return result.await() }
     override suspend fun authorizeChange(pin: String) = PinChangeCheck(result.await(), "change-proof")
     override fun revokeChange(proof: String) { revoked = proof }
     override suspend fun create(pin: String) { result.await(); creations++ }
@@ -20,6 +21,25 @@ internal class DeferredPinAccess : PinAccess {
 }
 
 class PinResultLifecycleTest {
+    @Test fun repeatedChecksWhileBusyPerformExactlyOneVerification() {
+        val access = DeferredPinAccess()
+        lateinit var model: PinCodeViewModel
+        instrumentation.runOnMainSync {
+            model = PinCodeViewModel(application, access)
+            model.setVerifyMode()
+            model.onPinChange("2468")
+            repeat(10) { model.handleAction() }
+            assertTrue(model.busy)
+            assertEquals(1, access.verifications)
+            access.result.complete(PinResult.Verified)
+        }
+        instrumentation.waitForIdleSync()
+        instrumentation.runOnMainSync {
+            assertTrue(model.consumeCompletion())
+            assertFalse(model.consumeCompletion())
+            assertEquals(1, access.verifications)
+        }
+    }
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
     private val application get() = instrumentation.targetContext.applicationContext as Application
 

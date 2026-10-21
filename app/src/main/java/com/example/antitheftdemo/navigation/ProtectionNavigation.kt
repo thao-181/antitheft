@@ -102,10 +102,14 @@ internal fun NavGraphBuilder.protectionRoutes(navController: NavHostController, 
                 entry.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) &&
                 navController.previousBackStackEntry == target && type != null && targetModel != null &&
                 DetectionRepository.state.value.session == session) {
+                val trace = pinModel.verificationTrace
                 DetectionRepository.controller.issueProof(session)?.let { proof ->
-                    if (!targetModel.acceptProof(proof, type)) DetectionRepository.controller.revokeProof(proof)
+                    if (targetModel.acceptProof(proof, type)) targetModel.recordPinNavigation(trace)
+                    else DetectionRepository.controller.revokeProof(proof)
                 }
+                trace?.navigating()
                 navController.popBackStack()
+                trace?.navigated()
             }
         }
     }

@@ -146,7 +146,7 @@ fun PinCodeScreen(
             viewModel.error?.let { Text(userText(it), color = Color.White) }
 
             Button(
-                enabled = !viewModel.busy,
+                enabled = !viewModel.busy && !viewModel.completionPending,
                 onClick = {
                     viewModel.handleAction()
                     keyboardController?.hide()
@@ -157,6 +157,10 @@ fun PinCodeScreen(
                     .width(160.dp)
                     .height(48.dp)
             ) {
+                if (viewModel.busy) {
+                    CircularProgressIndicator(Modifier.size(16.dp).testTag("pin_verifying_progress"), color = Color(0xFF1976D2), strokeWidth = 2.dp)
+                    Spacer(Modifier.width(8.dp))
+                }
                 Text(
                     text = userText(viewModel.buttonText),
                     color = Color(0xFF1976D2),

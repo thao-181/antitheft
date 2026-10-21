@@ -2,40 +2,47 @@ package com.example.antitheftdemo.alarm
 
 import android.app.NotificationManager
 import android.content.Context
-import android.media.AudioAttributes
-import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.media.MediaPlayer
-import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
 import com.example.antitheftdemo.settings.AlarmSettings
 import com.example.antitheftdemo.util.releaseResources
 
 /** A single looping resource on the alarm stream. Never writes volume or DND policy. */
-class AndroidAlarmPlayback(context: Context, initial: AlarmSettings = AlarmSettings(), private val loop: Boolean = true) : AlarmPlayback {
+class AndroidAlarmPlayback internal constructor(
+    context: Context, initial: AlarmSettings, private val loop: Boolean,
+    private val focus: AlarmAudioFocus, private val playerFactory: () -> MediaPlayer = ::MediaPlayer
+) : AlarmPlayback {
+    constructor(context: Context, initial: AlarmSettings = AlarmSettings(), loop: Boolean = true) :
+        this(context, initial, loop, AndroidAlarmAudioFocus(context))
     private val context = context.applicationContext
     private val audio = context.getSystemService(AudioManager::class.java)
     private val notifications = context.getSystemService(NotificationManager::class.java)
     private val handler = Handler(Looper.getMainLooper())
-    private val attributes = AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ALARM)
-        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build()
+    private val attributes = alarmAudioAttributes()
+    private val recovery = AlarmFocusRecovery(SystemClock::elapsedRealtime)
     private var settings = initial
     private var player: MediaPlayer? = null
-    private var focusRequest: AudioFocusRequest? = null
-    private var focusListener: AudioManager.OnAudioFocusChangeListener? = null
     private var active = false
     private var prepared = false
-    private var focused = false
     private var generation = 0
+    private var focusGeneration = 0
+    private var focusGrantedAt: Long? = null
     private var stateCallback: (AlarmStatus) -> Unit = {}
     private var failureCallback: (String) -> Unit = {}
     private var lastStatus: AlarmStatus? = null
     private val health = object : Runnable {
         override fun run() {
             if (!active) return
-            try { publishStatus(); handler.postDelayed(this, 1000) }
+            try {
+                if (loop && recovery.recoveryPending && recovery.requestRecoveryIfEligible(focus.recoveryAllowed())) requestFocus()
+                resumeIfAllowed()
+                publishStatus()
+                handler.postDelayed(this, 500)
+            }
             catch (_: Exception) { fail("@string/audio_unavailable") }
         }
     }
@@ -44,53 +51,56 @@ class AndroidAlarmPlayback(context: Context, initial: AlarmSettings = AlarmSetti
         active = true
         stateCallback = onState
         failureCallback = onFailure
-        val current = generation
+        recovery.start()
         try {
-            val listener = AudioManager.OnAudioFocusChangeListener { change ->
-                if (!active || current != generation) return@OnAudioFocusChangeListener
-                try {
-                    when (change) {
-                        AudioManager.AUDIOFOCUS_LOSS -> fail("@string/audio_unavailable")
-                        AudioManager.AUDIOFOCUS_LOSS_TRANSIENT, AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
-                            focused = false
-                            if (prepared && player?.isPlaying == true) player?.pause()
-                            publishStatus()
-                        }
-                        AudioManager.AUDIOFOCUS_GAIN -> {
-                            focused = true
-                            if (prepared) player?.start()
-                            publishStatus()
-                        }
-                    }
-                } catch (_: Exception) { fail("@string/audio_unavailable") }
-            }
-            focusListener = listener
-            val granted = if (Build.VERSION.SDK_INT >= 26) {
-                val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
-                    .setAudioAttributes(attributes).setWillPauseWhenDucked(true).setAcceptsDelayedFocusGain(true)
-                    .setOnAudioFocusChangeListener(listener, handler).build()
-                focusRequest = request
-                audio.requestAudioFocus(request)
-            } else {
-                @Suppress("DEPRECATION")
-                audio.requestAudioFocus(listener, AudioManager.STREAM_ALARM, AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
-            }
-            if (granted == AudioManager.AUDIOFOCUS_REQUEST_FAILED) { fail("@string/audio_unavailable"); return }
-            focused = granted == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
-            preparePlayer()
+            requestFocus()
+            if (!active) return
             handler.post(health)
         } catch (_: Exception) { fail("@string/audio_unavailable") }
+    }
+    private fun abandonFocus() { focusGeneration++; focus.abandon() }
+    private fun requestFocus() {
+        abandonFocus()
+        val current = generation
+        val focusEpoch = focusGeneration
+        val result = focus.request { change ->
+            if (active && generation == current && focusGeneration == focusEpoch) {
+                try {
+                    focusGrantedAt = if (change == FocusChange.GAIN) SystemClock.elapsedRealtimeNanos() else null
+                    recovery.changed(change)
+                    if (!recovery.focused && prepared && player?.isPlaying == true) player?.pause()
+                    if (change == FocusChange.PERMANENT_LOSS) abandonFocus()
+                    resumeIfAllowed()
+                    publishStatus()
+                } catch (_: Exception) { fail("@string/audio_unavailable") }
+            }
+        }
+        recovery.requested(result)
+        if (result == FocusRequestResult.GRANTED && recovery.focused) focusGrantedAt = SystemClock.elapsedRealtimeNanos()
+        if (result == FocusRequestResult.DENIED && !loop) { fail("@string/audio_unavailable"); return }
+        if (player == null && result != FocusRequestResult.DENIED) preparePlayer()
+        resumeIfAllowed()
+        publishStatus()
+    }
+    private fun resumeIfAllowed() {
+        if (active && prepared && recovery.focused && player?.isPlaying == false) {
+            val granted = focusGrantedAt
+            player?.start()
+            focusGrantedAt = null
+            if (granted != null && Log.isLoggable("AntiTheftAudioTiming", Log.DEBUG)) Log.d("AntiTheftAudioTiming",
+                "FOCUS_TO_START duration_ms=${(SystemClock.elapsedRealtimeNanos() - granted) / 1_000_000.0}")
+        }
     }
     private fun preparePlayer() {
         releasePlayer()
         prepared = false
-        val media = MediaPlayer()
+        val media = playerFactory()
         player = media
         media.setAudioAttributes(attributes)
         media.isLooping = loop
         media.setOnPreparedListener {
             if (player !== it || !active) return@setOnPreparedListener
-            try { prepared = true; if (focused) it.start(); publishStatus() }
+            try { prepared = true; resumeIfAllowed(); publishStatus() }
             catch (_: Exception) { fail("@string/audio_unavailable") }
         }
         media.setOnErrorListener { failed, _, _ ->
@@ -115,7 +125,8 @@ class AndroidAlarmPlayback(context: Context, initial: AlarmSettings = AlarmSetti
         if (!active) return
         val silenced = audio.isStreamMute(AudioManager.STREAM_ALARM) ||
             notifications.currentInterruptionFilter == NotificationManager.INTERRUPTION_FILTER_NONE
-        val status = AlarmAudibility.status(prepared, focused, audio.getStreamVolume(AudioManager.STREAM_ALARM), silenced)
+        val predicted = AlarmAudibility.status(prepared, recovery.focused, audio.getStreamVolume(AudioManager.STREAM_ALARM), silenced)
+        val status = if (predicted == AlarmStatus.PLAYING && player?.isPlaying != true) AlarmStatus.SUSPENDED else predicted
         if (lastStatus != status) { lastStatus = status; stateCallback(status) }
     }
     private fun fail(message: String) {
@@ -132,25 +143,18 @@ class AndroidAlarmPlayback(context: Context, initial: AlarmSettings = AlarmSetti
     override fun stop() {
         active = false
         generation++
+        focusGeneration++
+        recovery.stop()
+        focusGrantedAt = null
         handler.removeCallbacksAndMessages(null)
         prepared = false
-        focused = false
-        val oldRequest = focusRequest
-        val oldListener = focusListener
-        focusRequest = null
-        focusListener = null
         stateCallback = {}
         failureCallback = {}
         lastStatus = null
         releaseResources({ resource, error -> Log.w("AntiTheftAudio", "Could not release $resource", error) },
             "player" to { releasePlayer() },
             "audio focus" to {
-                if (Build.VERSION.SDK_INT >= 26) oldRequest?.let { audio.abandonAudioFocusRequest(it) }
-                else {
-                    @Suppress("DEPRECATION")
-                    oldListener?.let { audio.abandonAudioFocus(it) }
-                }
-                Unit
+                focus.abandon()
             })
     }
 }

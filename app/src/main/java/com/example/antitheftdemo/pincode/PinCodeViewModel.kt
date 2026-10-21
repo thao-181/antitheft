@@ -10,12 +10,16 @@ import com.example.antitheftdemo.security.PinStore
 import com.example.antitheftdemo.security.PinAccess
 import com.example.antitheftdemo.security.PinResult
 import com.example.antitheftdemo.security.PinPolicy
+import com.example.antitheftdemo.security.PinCheckTrace
+import com.example.antitheftdemo.security.PinVerificationTimings
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 class PinCodeViewModel internal constructor(application: Application, private val store: PinAccess) : AndroidViewModel(application) {
     constructor(application: Application) : this(application, PinStore(application))
     private var verificationGeneration = 0
+    internal var verificationTrace: PinCheckTrace? = null
+        private set
     var isCreateMode by mutableStateOf(true)
         private set
     var isVerifyMode by mutableStateOf(false)
@@ -27,6 +31,7 @@ class PinCodeViewModel internal constructor(application: Application, private va
     fun consumeCompletion(): Boolean {
         if (!completionPending) return false
         completionPending = false
+        verificationTrace?.delivered()
         return true
     }
     private var settingsMode = false
@@ -65,6 +70,7 @@ class PinCodeViewModel internal constructor(application: Application, private va
             currentPin = ""
             completed = false
             completionPending = false
+            verificationTrace = null
         }
     }
     override fun onCleared() {
@@ -80,6 +86,7 @@ class PinCodeViewModel internal constructor(application: Application, private va
         }
     }
     fun handleAction() {
+        val clickedAt = PinVerificationTimings.now()
         if (busy || completed) return
         if (currentPin.length != 4) { error = "@string/pin_digits"; return }
         if (!isVerifyMode && isCreateMode) {
@@ -96,8 +103,11 @@ class PinCodeViewModel internal constructor(application: Application, private va
         busy = true
         val generation = verificationGeneration
         val verifying = isVerifyMode
+        val trace = if (verifying) PinCheckTrace(clickedAt) else null
+        verificationTrace = trace
         val submittedPin = currentPin
         viewModelScope.launch {
+            if (verifying) PinVerificationTimings.record(PinVerificationTimings.Step.CLICK_TO_LAUNCH, PinVerificationTimings.now() - clickedAt)
             try {
                 val result = if (isVerifyMode && settingsMode) {
                     val authorization = store.authorizeChange(submittedPin)
@@ -125,6 +135,7 @@ class PinCodeViewModel internal constructor(application: Application, private va
                     completed = true
                     firstPin = ""
                     currentPin = ""
+                    trace?.ready()
                     completionPending = true
                 } else {
                     currentPin = ""

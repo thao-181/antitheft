@@ -158,4 +158,27 @@ class ProtectionNavigationTest {
         compose.onNodeWithTag("pin_input").assertDoesNotExist()
         compose.runOnIdle { assertEquals(0, stops); assertEquals(AppRoutes.HOME, nav.currentDestination?.route) }
     }
+
+    @Test fun rapidRepeatedPinStopFlowsNeverLoseAuthorizationOrReuseIt() {
+        launch()
+        repeat(25) { index ->
+            if (index > 0) {
+                compose.runOnIdle {
+                    val id = DetectionRepository.controller.request(PROXIMITY_DETECTION)!!
+                    session = id
+                    assertTrue(DetectionRepository.attach(id, PROXIMITY_DETECTION) { message ->
+                        stops++
+                        DetectionRepository.ended(isolated, id, message)
+                    })
+                    DetectionRepository.controller.started(id)
+                }
+                compose.onNodeWithTag("home_PROXIMITY_DETECTION").performClick()
+            }
+            compose.onNodeWithTag("detection_circle").performClick()
+            submit("2468")
+            compose.onNodeWithTag("detection_circle").performClick()
+            compose.onNodeWithTag("home_PROXIMITY_DETECTION").assertIsNotSelected()
+            compose.runOnIdle { assertEquals(index + 1, stops); assertNull(DetectionRepository.state.value.session) }
+        }
+    }
 }

@@ -4,9 +4,16 @@ import android.app.Application
 import androidx.compose.runtime.*
 import androidx.lifecycle.AndroidViewModel
 import com.example.antitheftdemo.home.HomeItemType
+import com.example.antitheftdemo.security.PinCheckTrace
 
 class DetectionViewModel(application: Application) : AndroidViewModel(application) {
     private var proof: String? = null
+    private var pinTrace: PinCheckTrace? = null
+    internal fun recordPinNavigation(trace: PinCheckTrace?) { pinTrace = trace }
+    internal fun onStopRendered() {
+        if (authorizedSession != null && authorizedSession == state.value.session) pinTrace?.drawn()
+        pinTrace = null
+    }
     var authorizedSession by mutableStateOf<String?>(null)
         private set
     var stopCompleted by mutableStateOf(false)
@@ -25,6 +32,7 @@ class DetectionViewModel(application: Application) : AndroidViewModel(applicatio
         proof?.let(DetectionRepository.controller::revokeProof)
         proof = null
         authorizedSession = null
+        pinTrace = null
     }
     fun confirmStop(): Boolean {
         val value = proof ?: return false

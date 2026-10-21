@@ -28,6 +28,38 @@ class PinStoreInstrumentedTest {
         }
     }
     @After fun cleanup() { files.forEach { target.deleteSharedPreferences(it) } }
+    @Test fun cleanSuccessSkipsRedundantCommitButFailureAndCounterResetAreDurable() = runBlocking {
+        var commits = 0
+        val counted = object : ContextWrapper(context) {
+            override fun getApplicationContext(): Context = this
+            override fun getSharedPreferences(name: String, mode: Int): SharedPreferences {
+                val real = context.getSharedPreferences(name, mode)
+                return object : SharedPreferences by real {
+                    override fun edit(): SharedPreferences.Editor {
+                        val editor = real.edit()
+                        return object : SharedPreferences.Editor by editor {
+                            override fun putString(key: String, value: String?): SharedPreferences.Editor { editor.putString(key, value); return this }
+                            override fun putInt(key: String, value: Int): SharedPreferences.Editor { editor.putInt(key, value); return this }
+                            override fun putLong(key: String, value: Long): SharedPreferences.Editor { editor.putLong(key, value); return this }
+                            override fun commit(): Boolean { commits++; return editor.commit() }
+                        }
+                    }
+                }
+            }
+        }
+        val store = PinStore(counted)
+        store.create("2468")
+        commits = 0
+        assertEquals(PinResult.Verified, store.verify("2468"))
+        assertEquals(0, commits)
+        assertEquals(PinResult.Incorrect, store.verify("0000"))
+        assertEquals(1, commits)
+        assertEquals(PinResult.Verified, store.verify("2468"))
+        assertEquals(2, commits)
+        assertEquals(0, context.getSharedPreferences("pin_security", Context.MODE_PRIVATE).getInt("failures", -1))
+        assertEquals(PinResult.Verified, PinStore(counted).verify("2468"))
+        assertEquals(2, commits)
+    }
     @Test fun encryptedPinSurvivesRepositoryRecreationAndCannotBeOverwritten() = runBlocking {
         val store = PinStore(context)
         assertFalse(store.hasPin)

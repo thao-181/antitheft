@@ -20,6 +20,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -43,7 +44,7 @@ fun DetectionScreen(
 ) {
     val snapshot by viewModel.state.collectAsStateWithLifecycle()
     DetectionContent(title, itemType, snapshot, onBackClick, authorizedSession, stopCompleted,
-        onDeactivate, onConfirmStop, onActivate = { viewModel.onCircleClick(itemType) })
+        onDeactivate, onConfirmStop, onActivate = { viewModel.onCircleClick(itemType) }, onStopRendered = viewModel::onStopRendered)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -57,7 +58,8 @@ internal fun DetectionContent(
     stopCompleted: Boolean = false,
     onDeactivate: () -> Unit,
     onConfirmStop: () -> Unit,
-    onActivate: () -> Unit
+    onActivate: () -> Unit,
+    onStopRendered: () -> Unit = {}
 ) {
     val currentState = snapshot.states.getValue(itemType)
     val presentation = detectionPresentation(snapshot, itemType, authorizedSession, stopCompleted)
@@ -98,7 +100,10 @@ internal fun DetectionContent(
                         DetectionPresentation.SECURED -> "@string/secured"
                         DetectionPresentation.AUTHORIZED_STOP -> "@string/stop_protection"
                     }),
-                    modifier = Modifier.fillMaxSize().testTag("detection_circle").clickable(
+                    modifier = Modifier.fillMaxSize().drawWithContent {
+                        drawContent()
+                        if (confirming) onStopRendered()
+                    }.testTag("detection_circle").clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null
                     ) {

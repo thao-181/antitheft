@@ -15,6 +15,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import com.example.antitheftdemo.security.PinVerificationTimings.Step
 
 internal interface PinAccess {
     val hasPin: Boolean
@@ -34,7 +35,21 @@ class PinStore(context: Context) : PinAccess {
         check(!hasPin) { "PIN already exists" }
         savePin(pin, createKey = true)
     } }
-    override suspend fun verify(pin: String): PinResult = withContext(Dispatchers.IO) { mutex.withLock { verifyLocked(pin) } }
+    override suspend fun verify(pin: String): PinResult {
+        val started = PinVerificationTimings.now()
+        var finished = started
+        val result = withContext(Dispatchers.IO) {
+            PinVerificationTimings.record(Step.IO_DISPATCH, PinVerificationTimings.now() - started)
+            val waiting = PinVerificationTimings.now()
+            mutex.withLock {
+                PinVerificationTimings.record(Step.MUTEX_WAIT, PinVerificationTimings.now() - waiting)
+                verifyLocked(pin).also { finished = PinVerificationTimings.now() }
+            }
+        }
+        PinVerificationTimings.record(Step.IO_RESUME, PinVerificationTimings.now() - finished)
+        PinVerificationTimings.record(Step.VERIFY_TOTAL, PinVerificationTimings.now() - started)
+        return result
+    }
     override suspend fun authorizeChange(pin: String): PinChangeCheck = withContext(Dispatchers.IO) { mutex.withLock {
         val result = verifyLocked(pin)
         val proof = if (result == PinResult.Verified)
@@ -61,26 +76,42 @@ class PinStore(context: Context) : PinAccess {
     }
     private fun verifyLocked(pin: String): PinResult {
         val now = System.currentTimeMillis()
-        val remaining = remainingDelay(now)
-        if (remaining > 0) return PinResult.Locked((remaining + 999) / 1000)
-        val salt = prefs.getString("salt", null) ?: error("PIN is not configured")
-        val stored = prefs.getString("verifier", null) ?: error("Missing verifier")
-        val iv = prefs.getString("iv", null) ?: error("Missing verifier IV")
-        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        cipher.init(Cipher.DECRYPT_MODE, key(create = false), GCMParameterSpec(128, decode(iv)))
-        val expected = cipher.doFinal(decode(stored))
-        val success = try { PinPolicy.matches(pin, decode(salt), expected) } finally { expected.fill(0) }
+        val (salt, stored, iv) = PinVerificationTimings.measure(Step.PREFERENCES_READ) {
+            val remaining = remainingDelay(now)
+            if (remaining > 0) return PinResult.Locked((remaining + 999) / 1000)
+            Triple(prefs.getString("salt", null) ?: error("PIN is not configured"),
+                prefs.getString("verifier", null) ?: error("Missing verifier"),
+                prefs.getString("iv", null) ?: error("Missing verifier IV"))
+        }
+        val secretKey = PinVerificationTimings.measure(Step.KEYSTORE_LOOKUP) { key(create = false) }
+        val expected = PinVerificationTimings.measure(Step.AES_DECRYPT) {
+            Cipher.getInstance("AES/GCM/NoPadding").run {
+                init(Cipher.DECRYPT_MODE, secretKey, GCMParameterSpec(128, decode(iv)))
+                doFinal(decode(stored))
+            }
+        }
+        val success = try {
+            PinVerificationTimings.measure(Step.PBKDF2_MATCH) { PinPolicy.matches(pin, decode(salt), expected) }
+        } finally { expected.fill(0) }
         return if (success) {
-            check(prefs.edit().putInt("failures", 0).putLong("blocked_until", 0)
-                .putLong("blocked_elapsed", 0).commit())
+            PinVerificationTimings.measure(Step.PREFERENCES_WRITE) {
+                // A clean successful attempt has nothing to reset. Every attempt still derives the PIN.
+                if (prefs.getInt("failures", 0) != 0 || prefs.getLong("blocked_until", 0) != 0L ||
+                    prefs.getLong("blocked_elapsed", 0) != 0L) {
+                    check(prefs.edit().putInt("failures", 0).putLong("blocked_until", 0)
+                        .putLong("blocked_elapsed", 0).commit())
+                }
+            }
             PinResult.Verified
         } else {
             val failures = (prefs.getInt("failures", 0) + 1).coerceAtMost(30)
             val delay = PinPolicy.delayAfterFailures(failures)
-            check(prefs.edit().putInt("failures", failures)
+            PinVerificationTimings.measure(Step.PREFERENCES_WRITE) {
+                check(prefs.edit().putInt("failures", failures)
                 .putLong("blocked_until", now + delay)
                 .putLong("blocked_elapsed", SystemClock.elapsedRealtime() + delay)
-                .putLong("last_elapsed", SystemClock.elapsedRealtime()).commit())
+                    .putLong("last_elapsed", SystemClock.elapsedRealtime()).commit())
+            }
             if (delay > 0) PinResult.Locked(delay / 1000) else PinResult.Incorrect
         }
     }
